@@ -1,0 +1,88 @@
+{% extends 'base.html' %} {% block head %}
+<title>Editor</title>
+{% endblock %} {% block body %}
+<div class="columns has-background-white-bis editor-container">
+    <div class="column m-0 is-half">
+        <form action="/submitCode" method="POST" class="m-2">
+            <span class="tag is-warning is-medium mb-2">Input: </span>
+            <textarea name="code_editor" id="code_editor1">{{data[0]}}</textarea>
+            <script>
+                var myCodeMirror = CodeMirror.fromTextArea(document.getElementById('code_editor1'), {
+                    value: "function myScript(){return 100;}\n",
+                    mode: "javascript",
+                    lineNumbers: true,
+                    theme: "material-ocean",
+                });
+            </script>
+            <input type="Submit" value="Interpretar" class="btn btn-danger mt-2" />
+        </form>
+    </div>
+    <div class="column m-0 is-half">
+        <form class="m-2">
+            <span class="tag is-warning is-medium mb-2">Output: </span>
+            <textarea name="code_editor" id="code_editor2">{{data[1]}}</textarea>
+            <script>
+                var myCodeMirror = CodeMirror.fromTextArea(document.getElementById('code_editor2'), {
+                    value: "function myScript(){return 100;}\n",
+                    mode: "julia",
+                    lineNumbers: true,
+                    theme: "material-ocean",
+                    readOnly: true
+                });
+            </script>
+        </form>
+    </div>
+    
+</div>
+<section class="section has-background-white-bis p-5">
+    <h1 class="title">Tabla de simbolos</h1>
+    <table class="table is-bordered is-striped is-hoverable is-fullwidth">
+        <thead>
+          <tr>
+            <th><abbr>Id</abbr></th>
+            <th><abbr>Tipo</abbr></th>
+            <th><abbr>Ámbito</abbr></th>
+            <th><abbr>Fila</abbr></th>
+            <th><abbr>Columna</abbr></th>
+          </tr>
+        </thead>
+        
+        <tbody>
+            {% for t in data[2] %}
+            <tr>
+                <th>{{ t["id"] }}</th>
+                <td>{{ t["tipo"] }}</td>
+                <td>{{ t["entorno"] }}</td>
+                <td>{{ t["linea"] }}</td>
+                <td>{{ t["columna"] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+      </table>
+  </section>
+  <section class="section has-background-white-bis p-5">
+    <h1 class="title">Tabla de errores</h1>
+    <table class="table is-bordered is-striped is-hoverable is-fullwidth">
+        <thead>
+          <tr>
+            <th><abbr>No</abbr></th>
+            <th><abbr></abbr>Descripción</abbr></th>
+            <th><abbr>Linea</abbr></th>
+            <th><abbr>Fecha y hora</abbr></th>
+          </tr>
+        </thead>
+        
+        <tbody>
+            {% for t in data[3] %}
+            <tr>
+                <th>{{ t["no"] }}</th>
+                <td>{{ t["desc"] }}</td>
+                <td>{{ t["linea"] }}</td>
+                <td>{{ t["time"] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+      </table>
+  </section>
+    
+{% endblock %}

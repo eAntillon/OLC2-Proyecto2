@@ -1,0 +1,24 @@
+
+.nav-link, .navbar-brand {
+  line-height: 2.25rem !important;
+  text-align: center !important;
+  min-height: 2.25rem !important;
+  padding: 0 !important;
+}
+
+.CodeMirror {
+  border-radius: 4px;
+  height: 670px !important;
+  padding-top: 4px;
+}
+
+.columns {
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+@media (min-width: 1350px) {
+  .is-fullheight{
+    min-height: calc(100vh - 68px) !important;
+  }
+}

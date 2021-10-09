@@ -1,0 +1,27 @@
+{% extends 'base.html' %} {% block head %}
+<title>Proyecto1</title>
+{% endblock %} {% block body %}
+<div class="box">
+    <nav class="panel">
+        <p class="panel-heading">Árbol de análisis sintáctico</p>
+        <div class="panel-block has-background-dark">
+            {{svg}}
+        </div>
+    </nav>
+</div>
+<script>
+    var svgElement = document.querySelector('svg')
+    var panZoomTiger = svgPanZoom(svgElement, {controlIconsEnabled: true,maxZoom: 40,center: true})
+</script>
+<style>
+    .panel-block {
+        min-height: 600px;
+        width: 100%;
+        
+    }
+    svg {
+            margin: auto;
+            width: 100%;
+        }
+</style>
+{% endblock %}
