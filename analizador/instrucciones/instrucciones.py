@@ -3,6 +3,7 @@ from analizador.expresiones.expresiones import valorExpresion, expresion
 import sys
 sys.path.append('../')
 from analizador.tabla_simbolos import simbolo, Tipo
+from analizador.write import write, pointer
 from abc import ABC, abstractmethod
 from analizador.error import ContinueError, ReturnError, error, BreakError
 import traceback
@@ -21,29 +22,44 @@ class asignacion(instruccion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-
-        existance = tabla_simbolos.get(self.id)
-        #ASIGNAR STRUCT
+    def interpretar(self, tabla_simbolos, wr:write, true = "", false = "", entorno = "global"):
        
         # ASIGNAR EXPRESION
-        expresion = self.expresion.interpretar(tabla_simbolos)
-        if isinstance(expresion, dict):
-            s = tabla_simbolos.get(self.id)
-            if(s == None):
-                tabla_simbolos.add(simbolo(self.id, expresion, Tipo.Struct, entorno, self.linea,self.columna))
-                tabla_simbolos.add_variabe_struct(self.id, expresion["__tipo_struct"])
+        expresion = self.expresion.interpretar(tabla_simbolos, wr)
+        existance:simbolo = tabla_simbolos.get(self.id)
+        # AGregar un simbolo nuevo
+        if existance is not None:
+            wr.insert_stack(existance.apuntador,expresion.value)
+        else:
+            pos = tabla_simbolos.getPos()
+            temp = f"L{wr.getLabel()}"
+            if expresion.type == Tipo.Bool:
+                wr.place_label(expresion.truelbl)
+                wr.insert_stack(pos,1)
+                wr.place_goto(temp)
+                wr.place_label(expresion.falselbl)
+                wr.insert_stack(pos,0)
+                wr.place_label(temp)
             else:
-                tabla_simbolos.update(simbolo(self.id, expresion, Tipo.Struct, entorno, self.linea,self.columna))
-                tabla_simbolos.add_variabe_struct(self.id, expresion["__tipo_struct"])    
-        else:  
-            s = simbolo(self.id, expresion.value, expresion.type, entorno, self.linea, self.columna)
-            if existance is None:
-                # Agregar nuevo simbolo
-                tabla_simbolos.add(s)
-            else:
-                # Actualizar valor
-                tabla_simbolos.update(s)
+                wr.insert_stack(pos,expresion.value)
+            s = simbolo(self.id,expresion.type,entorno, pos, self.linea, self.columna)
+            tabla_simbolos.add(s)
+        # if isinstance(expresion, dict):
+        #     s = tabla_simbolos.get(self.id)
+        #     if(s == None):
+        #         tabla_simbolos.add(simbolo(self.id, expresion, Tipo.Struct, entorno, self.linea,self.columna))
+        #         tabla_simbolos.add_variabe_struct(self.id, expresion["__tipo_struct"])
+        #     else:
+        #         tabla_simbolos.update(simbolo(self.id, expresion, Tipo.Struct, entorno, self.linea,self.columna))
+        #         tabla_simbolos.add_variabe_struct(self.id, expresion["__tipo_struct"])    
+        # else:  
+        #     s = simbolo(self.id, expresion.value, expresion.type, entorno, self.linea, self.columna)
+        #     if existance is None:
+        #         # Agregar nuevo simbolo
+        #         tabla_simbolos.add(s)
+        #     else:
+        #         # Actualizar valor
+        #         tabla_simbolos.update(s)
 
 class asignacion_array(instruccion):
     def __init__(self, id: str, expresiones, linea: int, columna: int):
@@ -135,26 +151,35 @@ class instruccion_if(instruccion):
     def insertar_else(self, instrucciones):
         self.instrucciones_else = instrucciones
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        valor_expresion = self.expresion.interpretar(tabla_simbolos)
+    def interpretar(self, tabla_simbolos, wr:write):
+        valor_expresion = self.expresion.interpretar(tabla_simbolos, wr)
         if(valor_expresion.type != Tipo.Bool):
             error("se esperaba una expresion de tipo 'Boolean', se obtuvo '%s'"%(valor_expresion.type), "instruccion if", self.line)
-        if(valor_expresion.value == True):
-            for instruccion in self.instrucciones:
-                try:
-                    instruccion.interpretar(tabla_simbolos, "IF")
-                except BreakError:
-                    raise BreakError("break")
-                except ContinueError:
-                    raise ContinueError("continue")
-                except ReturnError as r:
-                    raise ReturnError(r.expresion)
+        wr.comment("INSTRUCCION IF")
+        wr.place_label(valor_expresion.truelbl)
+        salida = f"L{wr.getLabel()}"
+        for instruccion in self.instrucciones:
+            # try:
+            instruccion.interpretar(tabla_simbolos, wr)
+            # except BreakError:
+            #     raise BreakError("break")
+            # except ContinueError:
+            #     raise ContinueError("continue")
+            # except ReturnError as r:
+            #     raise ReturnError(r.expresion)
+        wr.place_goto(salida)
+        wr.place_label(valor_expresion.falselbl)
+        if(self.instruccion_elseif is not None):
+            self.instruccion_elseif.interpretar(tabla_simbolos, wr)
+            for inst in self.instrucciones_else:
+                inst.interpretar(tabla_simbolos, wr)
+            wr.place_label(salida)
         else:
-            if(self.instruccion_elseif is not None):
-                self.instruccion_elseif.interpretar(tabla_simbolos, "ELIF")
-            elif(len(self.instrucciones_else) > 0):
-                for inst in self.instrucciones_else:
-                    inst.interpretar(tabla_simbolos, "ELSE")
+            for inst in self.instrucciones_else:
+                inst.interpretar(tabla_simbolos, wr)
+            wr.place_label(salida)
+
+        
 
 class instruccion_while(instruccion):
     def __init__(self, expresion, instrucciones, linea, columna):
@@ -322,40 +347,31 @@ class instruccion_for(instruccion):
                             continue
 
 class instruccion_print(instruccion):
-
     def __init__(self, expresiones, tipo):
         self.expresiones = expresiones
         self.tipo = tipo
-
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        valores = []
+    def interpretar(self, tabla_simbolos, wr:write):
         for expresion in self.expresiones:
-            v = expresion.interpretar(tabla_simbolos)
-            if(isinstance(v, list)):
-                valores.append(self.valorToString(v))
-            else:
-                valores.append(v.toString())
-        string = " ".join(valores)
+            v:valorExpresion = expresion.interpretar(tabla_simbolos, wr)
+            if v.type == Tipo.String:
+                wr.insert_stack(0, v.value)
+                wr.insert_code("printString();")
+            elif v.type == Tipo.Bool:
+                true = v.truelbl
+                false = v.falselbl
+                salida = f"L{wr.getLabel()}"
+                wr.place_label(true)
+                wr.print_true()
+                wr.place_goto(salida)
+                wr.place_label(false)
+                wr.print_false()
+                wr.place_label(salida)
+            elif v.type == Tipo.Int64:
+                wr.place_print("d", v.value)
+            elif v.type == Tipo.Float64:
+                wr.place_print("f", v.value)
         if self.tipo == "println":
-            string += "\n"
-        #     #print(string)
-        # else:
-        #     #print(string, end='')
-        try:
-            f = open("./analizador/salida.txt", "a")
-            f.write(string)
-            f.close()
-        except Exception:
-            pass
-    def valorToString(self, valor):
-        if(isinstance(valor, list)):
-            cadena = "["
-            valores = []
-            for v in valor:
-                valores.append(str(self.valorToString(v)))
-            return cadena + ",".join(valores) + "]"
-        else:
-            return valor.value
+            wr.place_print("c", 10)
 
 class instruccion_break(instruccion):
     def __init__(self, linea, columna): 
