@@ -1,4 +1,6 @@
 import sys, math
+
+from analizador.write import write, pointer
 sys.path.append('../')
 from analizador.tabla_simbolos import simbolo, Tipo
 from analizador.error import error
@@ -15,9 +17,11 @@ class expresion:
 
 class valorExpresion(expresion):
 
-    def __init__(self, value, type, linea = 0, columna = 0):
+    def __init__(self, value, type, true = '', false = ''):
         self.value = value
         self.type = type
+        self.truelbl = true
+        self.falselbl = false
 
     def toString(self):
         if(self.type == Tipo.Array):
@@ -60,20 +64,31 @@ class expresion_primitiva(expresion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):      
+    def interpretar(self, tabla_simbolos, wr:write, true = "", false = ""):      
         tipo_dato = None
         valor_interpretado = self.valor
         if(type(self.valor) is str):
             if len(self.valor) == 0:
-                tipo_dato = Tipo.String
+                return None      
             elif(self.valor.upper() == "TRUE"):
                 # BOOL VALIDO
                 tipo_dato = Tipo.Bool
                 valor_interpretado = True
+                true = f"L{wr.getLabel()}"
+                false = f"L{wr.getLabel()}"
+                wr.place_goto(true)
+                wr.place_goto(false)
+                
             elif(self.valor.upper() == "FALSE"):
                 # BOOL VALIDO
                 tipo_dato = Tipo.Bool
                 valor_interpretado = False
+                if true == "":
+                    true = f"L{wr.getLabel()}"
+                if false == "":
+                    false = f"L{wr.getLabel()}"
+                wr.place_goto(false)
+                wr.place_goto(true)
             elif(self.valor[0] =="'" and len(self.valor) == 3 and self.valor[-1] == "'"):
                 # CHAR VALIDO
                 tipo_dato = Tipo.Char
@@ -82,17 +97,29 @@ class expresion_primitiva(expresion):
                 # CHAR INVALIDO
                 error("sintaxis invalida", "expresion", self.linea)
             else:
+                # agregar a heap
+                temp = f"T{wr.getPointer()}"
+                wr.insert_code(f"{temp} = H;")
+                for ch in self.valor:
+                    wr.insert_heap("H", ord(ch))
+                    wr.next_heap()
+                wr.insert_heap("H", -1)
+                wr.next_heap()
                 tipo_dato = Tipo.String
+                valor_interpretado = temp
+
         elif type(self.valor) is int:
             # INT64 VALIDO
             tipo_dato = Tipo.Int64
+            valor_interpretado = str(valor_interpretado) + ".0"
+
         elif type(self.valor) is float:
             # FLOAT64 VALIDO
             tipo_dato = Tipo.Float64
         else:
             error("tipo no definido","expresion", self.linea)
         
-        return valorExpresion(valor_interpretado, tipo_dato)
+        return valorExpresion(valor_interpretado, tipo_dato, true, false)
         
 class expresion_id(expresion):
 
@@ -101,17 +128,30 @@ class expresion_id(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
+    def interpretar(self, tabla_simbolos,wr:write,true = "", false = "" ):
         valor_interpretado = tabla_simbolos.get(self.valor)
         if(valor_interpretado is not None):
-            return valorExpresion(valor_interpretado.valor, valor_interpretado.tipo)
+            tempValue = f"T{wr.getPointer()}"
+            wr.get_stack(tempValue,valor_interpretado.apuntador)
+            if valor_interpretado.tipo == Tipo.Bool:
+                if true == "":
+                    truelbl = f"L{wr.getLabel()}"
+                else:
+                    truelbl = true
+                if false == "":
+                    falselbl = f"L{wr.getLabel()}"
+                else:
+                    falselbl = false
+                wr.place_if(tempValue,1,"==",truelbl)
+                wr.place_goto(falselbl)
+                return valorExpresion(tempValue, valor_interpretado.tipo, truelbl, falselbl)
+            else:
+                return valorExpresion(tempValue, valor_interpretado.tipo)
         else:
             error("variable %s no definida"%(self.valor), "expresion id", self.linea)
 
 class expresion_binaria(expresion):
     
-    label = 'expression_binaria'
-
     def __init__(self, expI, operador, expD, linea, columna):
         self.expI = expI
         self.expD = expD
@@ -119,204 +159,85 @@ class expresion_binaria(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos ,entorno = "Global"):
-        expI = self.expI.interpretar(tabla_simbolos)
-        expD = self.expD.interpretar(tabla_simbolos)
-        valorI = expI.value
-        valorD = expD.value
-        tipoI = expI.type
-        tipoD = expD.type
-        # SUMA
-        if(self.operador == "+"):
-            if(tipoI == Tipo.Int64):
-                if(tipoD == Tipo.Int64):
-                    return valorExpresion(valorI + valorD, Tipo.Int64)
-                elif (tipoD == Tipo.Float64):
-                    return valorExpresion(valorI + valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y 'y '%s"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI + valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-        # RESTA
-        elif(self.operador == "-"):
-            if(tipoI == Tipo.Int64):
-                if(tipoD == Tipo.Int64):
-                    return valorExpresion(valorI - valorD, Tipo.Int64)
-                elif (tipoD == Tipo.Float64):
-                    return valorExpresion(valorI - valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI - valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-        # MULTIPLICACION
-        elif(self.operador == "*"):
-            if(tipoI == Tipo.Int64):
-                if(tipoD == Tipo.Int64):
-                    return valorExpresion(valorI * valorD, Tipo.Int64)
-                elif(tipoD == Tipo.Float64):
-                    return valorExpresion(valorI * valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI * valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.String):
-                if(tipoD == Tipo.String):
-                    return valorExpresion(valorI + valorD, Tipo.String)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea) 
-        # DIVISION
-        elif(self.operador == "/"):
-            if(tipoI == Tipo.Int64 or tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI / valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-        # POTENCIA
-        elif(self.operador == "^"):
-            if(tipoI == Tipo.Int64):
-                if(tipoD == Tipo.Int64):
-                    return valorExpresion(valorI ** valorD, Tipo.Int64)
-                elif(tipoD == Tipo.Float64):
-                    return valorExpresion(valorI ** valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI ** valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.String):
-                if(tipoD == Tipo.Int64):
-                    str_res = valorD*valorI
-                    return valorExpresion(str_res, Tipo.String)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea) 
-        # MODULO
-        elif(self.operador == "%"):
-            if(tipoI == Tipo.Int64):
-                if(tipoD == Tipo.Int64):
-                    return valorExpresion(valorI % valorD, Tipo.Int64)
-                elif(tipoD == Tipo.Float64):
-                    return valorExpresion(valorI % valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI % valorD, Tipo.Float64)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea) 
-        # MAYOR
-        elif(self.operador == ">"):
-            if(tipoI == Tipo.Int64 or tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI > valorD, Tipo.Bool)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.String and tipoD == Tipo.String):
-                return valorExpresion(valorI > valorD, Tipo.Bool)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea) 
-        # MAYOR O IGUAL
-        elif(self.operador == ">="):
-            if(tipoI == Tipo.Int64 or tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI >= valorD, Tipo.Bool)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.String and tipoD == Tipo.String):
-                return valorExpresion(valorI >= valorD, Tipo.Bool)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea) 
-        # MENOR
-        elif(self.operador == "<"):
-            if(tipoI == Tipo.Int64 or tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI < valorD, Tipo.Bool)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.String and tipoD == Tipo.String):
-                return valorExpresion(valorI < valorD, Tipo.Bool)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea) 
-        # MENOR O IGUAL
-        elif(self.operador == "<="):
-            if(tipoI == Tipo.Int64 or tipoI == Tipo.Float64):
-                if(tipoD == Tipo.Int64 or tipoD == Tipo.Float64):
-                    return valorExpresion(valorI <= valorD, Tipo.Bool)
-                else:
-                    #ERROR TIPOS
-                    error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-            elif(tipoI == Tipo.String and tipoD == Tipo.String):
-                return valorExpresion(valorI <= valorD, Tipo.Bool)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea) 
-        # IGUAL
-        elif(self.operador == "=="):
-            return valorExpresion(valorI == valorD, Tipo.Bool)
-        # DIFERENTE
-        elif(self.operador == "!="):
-            return valorExpresion(valorI != valorD, Tipo.Bool)
-        # AND
-        elif(self.operador == "&&"):
-            if(tipoI == Tipo.Bool and tipoD == Tipo.Bool):
-                return valorExpresion(valorI and valorD, Tipo.Bool)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
-        # OR
-        elif(self.operador == "||"):
-            if(tipoI == Tipo.Bool and tipoD == Tipo.Bool):
-                return valorExpresion(valorI or valorD, Tipo.Bool)
-            else:
-                #ERROR TIPOS
-                error("operandos no admitidos para %s: '%s' y '%s'"%(self.operador, tipoI.value, tipoD.value), "expresion", self.linea)
+    def interpretar(self, tabla_simbolos, wr:write, true = "", false = ""):
+        
+        # operacion normal binaria
+        if self.operador in ["+", "-", "*", "%", "/"]:
+            expI = self.expI.interpretar(tabla_simbolos,wr)
+            expD = self.expD.interpretar(tabla_simbolos,wr)
+            # interpretar si es exp 
+            if isinstance(expI,valorExpresion) is False:
+                expI = self.expI.interpretar(tabla_simbolos,wr)
+            # interpretar si es exp 
+            elif isinstance(expD,valorExpresion) is False:
+                expD = self.expD.interpretar(tabla_simbolos,wr)
+
+            '''AGREGAR STRINGS'''
+            if self.operador == "*":
+                if expI.type == Tipo.String and expD.type == Tipo.String:
+                    pass
+            temp = f"T{wr.getPointer()}"
+            wr.place_operation(temp, expI.value, expD.value, self.operador)
+            
+            if expI.type == Tipo.Float64 or expD.type == Tipo.Float64:
+                return valorExpresion(temp, Tipo.Float64)
+            if self.operador == "/":
+                return valorExpresion(temp, Tipo.Float64)
+            return valorExpresion(temp, Tipo.Int64)
+
+        elif self.operador == "^":
+            expI = self.expI.interpretar(tabla_simbolos,wr)
+            expD = self.expD.interpretar(tabla_simbolos,wr)
+            # interpretar si es exp 
+            if isinstance(expI,valorExpresion) is False:
+                expI = self.expI.interpretar(tabla_simbolos,wr)
+            # interpretar si es exp 
+            elif isinstance(expD,valorExpresion) is False:
+                expD = self.expD.interpretar(tabla_simbolos,wr)
+                if expI.type == Tipo.String and expD.type == Tipo.Int64:
+                    pass
+                elif expI.type == Tipo.Int64 and expD.type == Tipo.String:
+                    pass
+        elif self.operador in [">", "<", ">=", "<=", "==", "!="]:
+            expI = self.expI.interpretar(tabla_simbolos,wr)
+            expD = self.expD.interpretar(tabla_simbolos,wr)
+            # interpretar si es exp 
+            if isinstance(expI,valorExpresion) is False:
+                expI = self.expI.interpretar(tabla_simbolos,wr)
+
+            # interpretar si es exp 
+            elif isinstance(expD,valorExpresion) is False:
+                expD = self.expD.interpretar(tabla_simbolos,wr)
+            if true == "":
+                true = f"L{wr.getLabel()}"
+            if false == "":
+                false = f"L{wr.getLabel()}"
+            wr.place_if(expI.value, expD.value, self.operador, true)
+            wr.place_goto(false)
+            return valorExpresion("", Tipo.Bool, true, false)
+
+        elif self.operador in ["||", "&&"]:
+            expI:valorExpresion = self.expI.interpretar(tabla_simbolos,wr, true, false)
+            if isinstance(expI,valorExpresion) is False:
+                expI = self.expI.interpretar(tabla_simbolos,wr)
+            
+            if self.operador == "&&":
+                wr.place_label(expI.truelbl)
+                expD:valorExpresion = self.expD.interpretar(tabla_simbolos,wr, "", expI.falselbl)
+                if isinstance(expD,valorExpresion) is False:
+                    expD = self.expD.interpretar(tabla_simbolos,wr, "", expI.falselbl)
+                return valorExpresion("", Tipo.Bool, expD.truelbl, expD.falselbl)
+            
+            if self.operador == "||":
+                wr.place_label(expI.falselbl)
+                expD:valorExpresion = self.expD.interpretar(tabla_simbolos,wr, expI.truelbl, "")
+                if isinstance(expD,valorExpresion) is False:
+                    expD = self.expD.interpretar(tabla_simbolos,wr, expI.truelbl, "")
+                return valorExpresion("", Tipo.Bool, expD.truelbl, expD.falselbl)
+
+        # escribir validacion en go
+        # elif self.operador == "/":
+        #     pass
 
 class expresion_nativa(expresion):
     def __init__(self, funcion, expresion, linea, columna):
