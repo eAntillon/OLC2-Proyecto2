@@ -34,6 +34,9 @@ class asignacion(instruccion):
             pos = tabla_simbolos.getPos()
             temp = f"L{wr.getLabel()}"
             if expresion.type == Tipo.Bool:
+                if expresion.value != "":
+                    wr.place_if(expresion.value, 1, "==", expresion.truelbl)
+                    wr.place_goto(expresion.falselbl)
                 wr.place_label(expresion.truelbl)
                 wr.insert_stack(pos,1)
                 wr.place_goto(temp)
@@ -155,7 +158,11 @@ class instruccion_if(instruccion):
         valor_expresion = self.expresion.interpretar(tabla_simbolos, wr)
         if(valor_expresion.type != Tipo.Bool):
             error("se esperaba una expresion de tipo 'Boolean', se obtuvo '%s'"%(valor_expresion.type), "instruccion if", self.line)
+        
         wr.comment("INSTRUCCION IF")
+        wr.place_if(valor_expresion.value, 1, "==", valor_expresion.truelbl)
+        wr.place_goto(valor_expresion.falselbl)
+
         wr.place_label(valor_expresion.truelbl)
         salida = f"L{wr.getLabel()}"
         for instruccion in self.instrucciones:
@@ -357,9 +364,16 @@ class instruccion_print(instruccion):
                 wr.insert_stack(0, v.value)
                 wr.insert_code("printString();")
             elif v.type == Tipo.Bool:
+                if v.value != "":
+                    wr.place_if(v.value, 1, "==", v.truelbl)
+                    wr.place_goto(v.falselbl)
+                
+
                 true = v.truelbl
                 false = v.falselbl
                 salida = f"L{wr.getLabel()}"
+                wr.place_goto(false)
+                wr.place_goto(true)
                 wr.place_label(true)
                 wr.print_true()
                 wr.place_goto(salida)

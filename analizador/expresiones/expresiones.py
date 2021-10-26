@@ -73,22 +73,22 @@ class expresion_primitiva(expresion):
             elif(self.valor.upper() == "TRUE"):
                 # BOOL VALIDO
                 tipo_dato = Tipo.Bool
-                valor_interpretado = True
-                true = f"L{wr.getLabel()}"
-                false = f"L{wr.getLabel()}"
-                wr.place_goto(true)
-                wr.place_goto(false)
+                valor_interpretado = 1
                 
-            elif(self.valor.upper() == "FALSE"):
-                # BOOL VALIDO
-                tipo_dato = Tipo.Bool
-                valor_interpretado = False
                 if true == "":
                     true = f"L{wr.getLabel()}"
                 if false == "":
                     false = f"L{wr.getLabel()}"
-                wr.place_goto(false)
-                wr.place_goto(true)
+                
+            elif(self.valor.upper() == "FALSE"):
+                # BOOL VALIDO
+                tipo_dato = Tipo.Bool
+                valor_interpretado = 0
+                if true == "":
+                    true = f"L{wr.getLabel()}"
+                if false == "":
+                    false = f"L{wr.getLabel()}"
+                
             elif(self.valor[0] =="'" and len(self.valor) == 3 and self.valor[-1] == "'"):
                 # CHAR VALIDO
                 tipo_dato = Tipo.Char
@@ -208,32 +208,106 @@ class expresion_binaria(expresion):
             # interpretar si es exp 
             elif isinstance(expD,valorExpresion) is False:
                 expD = self.expD.interpretar(tabla_simbolos,wr)
+
             if true == "":
                 true = f"L{wr.getLabel()}"
             if false == "":
                 false = f"L{wr.getLabel()}"
+                
+            # if expI.type == Tipo.Bool and expI.value == "":
+            #     salida = f"L{wr.getLabel()}"
+            #     temp = f"T{wr.getPointer()}"
+            #     wr.place_label(expI.truelbl)
+            #     wr.place_operation(temp, 1)
+            #     wr.place_goto(salida)
+            #     wr.place_label(expI.falselbl)
+            #     wr.place_operation(temp, 0)
+            #     wr.place_label(salida)
+            #     expI.value = temp
+
+            # elif expI.type == Tipo.Bool and expI.value != "":
+            #     wr.place_goto(expI.truelbl)
+            #     wr.place_goto(expI.falselbl)
+            #     salida = f"L{wr.getLabel()}"
+            #     temp = f"T{wr.getPointer()}"
+            #     wr.place_label(expI.truelbl)
+            #     wr.place_operation(temp, 1)
+            #     wr.place_goto(salida)
+            #     wr.place_label(expI.falselbl)
+            #     wr.place_operation(temp, 0)
+            #     wr.place_label(salida)
+
+            #     expI.value = temp
+            
+            # if expD.type == Tipo.Bool and expD.value == "":
+            #     wr.place_label(expD.truelbl)
+            #     wr.place_operation(temp, 1)
+            #     wr.place_goto(salida)
+            #     wr.place_label(expD.falselbl)
+            #     wr.place_operation(temp, 0)
+            #     wr.place_label(salida)
+
+            #     expD.value = temp
+            # elif expD.type == Tipo.Bool and expD.value != "":
+            #     wr.place_goto(expD.truelbl)
+            #     wr.place_goto(expD.falselbl)
+            #     salida = f"L{wr.getLabel()}"
+            #     temp = f"T{wr.getPointer()}"
+            #     wr.place_label(expD.truelbl)
+            #     wr.place_operation(temp, 1)
+            #     wr.place_goto(salida)
+            #     wr.place_label(expD.falselbl)
+            #     wr.place_operation(temp, 0)
+            #     wr.place_label(salida)
+            #     expD.value = temp
+
+            salida = f"L{wr.getLabel()}"
+            temp = f"T{wr.getPointer()}"
+            wr.comment("Expresion binaria")
             wr.place_if(expI.value, expD.value, self.operador, true)
             wr.place_goto(false)
-            return valorExpresion("", Tipo.Bool, true, false)
+            wr.place_label(true)
+            wr.place_operation(temp, 1)
+            wr.place_goto(salida)
+            wr.place_label(false)
+            wr.place_operation(temp, 0)
+            wr.place_label(salida)
+            salida1 = f"L{wr.getLabel()}"
+            salida2 = f"L{wr.getLabel()}"
+
+            return valorExpresion(temp, Tipo.Bool, salida1, salida2)
 
         elif self.operador in ["||", "&&"]:
             expI:valorExpresion = self.expI.interpretar(tabla_simbolos,wr, true, false)
+
             if isinstance(expI,valorExpresion) is False:
                 expI = self.expI.interpretar(tabla_simbolos,wr)
             
             if self.operador == "&&":
-                wr.place_label(expI.truelbl)
                 expD:valorExpresion = self.expD.interpretar(tabla_simbolos,wr, "", expI.falselbl)
                 if isinstance(expD,valorExpresion) is False:
                     expD = self.expD.interpretar(tabla_simbolos,wr, "", expI.falselbl)
-                return valorExpresion("", Tipo.Bool, expD.truelbl, expD.falselbl)
+                salida = f"L{wr.getLabel()}"
+                true = f"L{wr.getLabel()}"
+                false = f"L{wr.getLabel()}"
+                wr.place_if(expI.value, 1, "==", true)
+                wr.place_goto(false)
+                wr.place_label(true)
+                wr.place_if(expD.value, 1, "==", salida)
+                return valorExpresion("", Tipo.Bool, salida, false)
             
             if self.operador == "||":
-                wr.place_label(expI.falselbl)
                 expD:valorExpresion = self.expD.interpretar(tabla_simbolos,wr, expI.truelbl, "")
                 if isinstance(expD,valorExpresion) is False:
                     expD = self.expD.interpretar(tabla_simbolos,wr, expI.truelbl, "")
-                return valorExpresion("", Tipo.Bool, expD.truelbl, expD.falselbl)
+                salida = f"L{wr.getLabel()}"
+                true = f"L{wr.getLabel()}"
+                false = f"L{wr.getLabel()}"
+                wr.place_if(expI.value, 1, "==", true)
+                wr.place_goto(false)
+                wr.place_label(false)
+                wr.place_if(expD.value, 1, "==", true)
+                return valorExpresion("", Tipo.Bool, true, salida)
 
         # escribir validacion en go
         # elif self.operador == "/":
