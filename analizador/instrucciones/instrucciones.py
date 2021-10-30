@@ -2,8 +2,8 @@ from re import S
 from analizador.expresiones.expresiones import valorExpresion, expresion
 import sys
 sys.path.append('../')
-from analizador.tabla_simbolos import simbolo, Tipo
-from analizador.write import write, pointer
+from analizador.tabla_simbolos import simbolo, Tipo, tabla_simbolos as  ts
+from analizador.write import write
 from abc import ABC, abstractmethod
 from analizador.error import ContinueError, ReturnError, error, BreakError
 import traceback
@@ -22,21 +22,25 @@ class asignacion(instruccion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, wr:write, true = "", false = "", entorno = "global"):
+    def interpretar(self, tabla_simbolos, wr:write):
        
         # ASIGNAR EXPRESION
-        expresion = self.expresion.interpretar(tabla_simbolos, wr)
+        expresion = self.expresion.interpretar(tabla_simbolos,wr)
         existance:simbolo = tabla_simbolos.get(self.id)
         # AGregar un simbolo nuevo
         if existance is not None:
             wr.insert_stack(existance.apuntador,expresion.value)
         else:
+            tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
+            expresion1 = tabla_simbolos.get(self.id)
             pos = tabla_simbolos.getPos()
             temp = f"L{wr.getLabel()}"
+            if tabla_simbolos.entorno is not None:
+                pos = f"T{wr.getPointer()}"
+                wr.place_operation(pos, "P", expresion1.apuntador, "+")
+
             if expresion.type == Tipo.Bool:
-                if expresion.value != "":
-                    wr.place_if(expresion.value, 1, "==", expresion.truelbl)
-                    wr.place_goto(expresion.falselbl)
+                
                 wr.place_label(expresion.truelbl)
                 wr.insert_stack(pos,1)
                 wr.place_goto(temp)
@@ -45,24 +49,7 @@ class asignacion(instruccion):
                 wr.place_label(temp)
             else:
                 wr.insert_stack(pos,expresion.value)
-            s = simbolo(self.id,expresion.type,entorno, pos, self.linea, self.columna)
-            tabla_simbolos.add(s)
-        # if isinstance(expresion, dict):
-        #     s = tabla_simbolos.get(self.id)
-        #     if(s == None):
-        #         tabla_simbolos.add(simbolo(self.id, expresion, Tipo.Struct, entorno, self.linea,self.columna))
-        #         tabla_simbolos.add_variabe_struct(self.id, expresion["__tipo_struct"])
-        #     else:
-        #         tabla_simbolos.update(simbolo(self.id, expresion, Tipo.Struct, entorno, self.linea,self.columna))
-        #         tabla_simbolos.add_variabe_struct(self.id, expresion["__tipo_struct"])    
-        # else:  
-        #     s = simbolo(self.id, expresion.value, expresion.type, entorno, self.linea, self.columna)
-        #     if existance is None:
-        #         # Agregar nuevo simbolo
-        #         tabla_simbolos.add(s)
-        #     else:
-        #         # Actualizar valor
-        #         tabla_simbolos.update(s)
+            # id, tipo, inHeap, strucType = ""
 
 class asignacion_array(instruccion):
     def __init__(self, id: str, expresiones, linea: int, columna: int):
@@ -155,38 +142,29 @@ class instruccion_if(instruccion):
         self.instrucciones_else = instrucciones
 
     def interpretar(self, tabla_simbolos, wr:write):
-        valor_expresion = self.expresion.interpretar(tabla_simbolos, wr)
+        valor_expresion = self.expresion.interpretar(tabla_simbolos,wr)
         if(valor_expresion.type != Tipo.Bool):
             error("se esperaba una expresion de tipo 'Boolean', se obtuvo '%s'"%(valor_expresion.type), "instruccion if", self.line)
         
         wr.comment("INSTRUCCION IF")
-        wr.place_if(valor_expresion.value, 1, "==", valor_expresion.truelbl)
-        wr.place_goto(valor_expresion.falselbl)
 
-        wr.place_label(valor_expresion.truelbl)
         salida = f"L{wr.getLabel()}"
+        wr.place_label(valor_expresion.truelbl)
         for instruccion in self.instrucciones:
             # try:
-            instruccion.interpretar(tabla_simbolos, wr)
-            # except BreakError:
-            #     raise BreakError("break")
-            # except ContinueError:
-            #     raise ContinueError("continue")
-            # except ReturnError as r:
-            #     raise ReturnError(r.expresion)
+            instruccion.interpretar(tabla_simbolos,wr)
+            
         wr.place_goto(salida)
         wr.place_label(valor_expresion.falselbl)
         if(self.instruccion_elseif is not None):
-            self.instruccion_elseif.interpretar(tabla_simbolos, wr)
+            self.instruccion_elseif.interpretar(tabla_simbolos,wr)
             for inst in self.instrucciones_else:
-                inst.interpretar(tabla_simbolos, wr)
+                inst.interpretar(tabla_simbolos,wr)
             wr.place_label(salida)
         else:
             for inst in self.instrucciones_else:
-                inst.interpretar(tabla_simbolos, wr)
+                inst.interpretar(tabla_simbolos,wr)
             wr.place_label(salida)
-
-        
 
 class instruccion_while(instruccion):
     def __init__(self, expresion, instrucciones, linea, columna):
@@ -195,36 +173,29 @@ class instruccion_while(instruccion):
         self.linea = linea
         self.columna = columna 
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        RECURSION_MAXIMA = 3000
-        COUNT = 0
-        valor = self.expresion.interpretar(tabla_simbolos)
+    def interpretar(self, tabla_simbolos, wr:write):
+        wr.comment("INSTRUCCION WHILE")
+        inicio = f"L{wr.getLabel()}"
+        wr.place_label(inicio)
+
+        valor = self.expresion.interpretar(tabla_simbolos,wr)
+        print("VALOR", valor)
+
+        tabla_simbolos = ts(tabla_simbolos)
+        tabla_simbolos.cicloInicio = inicio
+
+        tabla_simbolos.cicloFinal = valor.falselbl
+
         if(valor.type != Tipo.Bool):
             error("se esperaba una expresion de tipo 'Boolean', se obtuvo '%s'"%(valor.type), "instruccion while", self.linea)
-        
-        flag_continue = False
-        while valor.value == True:
-            if flag_continue:
-                flag_continue = False
-                continue
-            try:
-                for inst in self.instrucciones:
-                    try:
-                        inst.interpretar(tabla_simbolos)
-                    except ContinueError:
-                        flag_continue = True
-                        break
-                    except BreakError:
-                        raise BreakError("Break")
-                        break
-                
-                valor = self.expresion.interpretar(tabla_simbolos)
-                COUNT += 1
-                if(COUNT == RECURSION_MAXIMA):
-                    error("recursion maxima alcanzada", "while", self.linea)
-                    break;
-            except BreakError:
-                break
+
+        wr.place_label(valor.truelbl)
+        for inst in self.instrucciones:
+                inst.interpretar(tabla_simbolos,wr)
+        wr.place_goto(inicio)
+        wr.place_label(valor.falselbl)
+        tabla_simbolos.cicloInicio = ""
+        tabla_simbolos.cicloFinal = ""
 
 class instruccion_for(instruccion):
     def __init__(self, id, expresion, instrucciones,tipo, linea, columna):
@@ -357,29 +328,25 @@ class instruccion_print(instruccion):
     def __init__(self, expresiones, tipo):
         self.expresiones = expresiones
         self.tipo = tipo
+
     def interpretar(self, tabla_simbolos, wr:write):
         for expresion in self.expresiones:
-            v:valorExpresion = expresion.interpretar(tabla_simbolos, wr)
+            v:valorExpresion = expresion.interpretar(tabla_simbolos,wr)
+            print(v)
+            wr.comment("PRINT")
             if v.type == Tipo.String:
                 wr.insert_stack(0, v.value)
                 wr.insert_code("printString();")
             elif v.type == Tipo.Bool:
-                if v.value != "":
-                    wr.place_if(v.value, 1, "==", v.truelbl)
-                    wr.place_goto(v.falselbl)
-                
-
-                true = v.truelbl
-                false = v.falselbl
-                salida = f"L{wr.getLabel()}"
-                wr.place_goto(false)
-                wr.place_goto(true)
-                wr.place_label(true)
+                temp = f"L{wr.getLabel()}"
+                wr.place_label(v.truelbl)
                 wr.print_true()
-                wr.place_goto(salida)
-                wr.place_label(false)
+
+                wr.place_goto(temp)
+                wr.place_label(v.falselbl)
                 wr.print_false()
-                wr.place_label(salida)
+                wr.place_label(temp)
+
             elif v.type == Tipo.Int64:
                 wr.place_print("d", v.value)
             elif v.type == Tipo.Float64:
@@ -392,8 +359,8 @@ class instruccion_break(instruccion):
         self.linea = linea
         self.columna = columna 
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        raise BreakError("Break")  
+    def interpretar(self, tabla_simbolos, wr:write):
+        wr.place_goto(tabla_simbolos.cicloFinal)
 
 class instruccion_continue(instruccion):
 
@@ -401,8 +368,8 @@ class instruccion_continue(instruccion):
         self.linea = linea
         self.columna = columna 
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        raise ContinueError("Continue")  
+    def interpretar(self, tabla_simbolos, wr:write):
+        wr.place_goto(tabla_simbolos.cicloInicio)  
 
 class definicion_struct(instruccion):
 
@@ -413,7 +380,7 @@ class definicion_struct(instruccion):
         self.linea = linea
         self.columna = columna 
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
+    def interpretar(self, entorno = "Global"):
         if(tabla_simbolos.get(self.id) == None and tabla_simbolos.get_struct(self.id) == None):
             if self.tipo == None:
                 tabla_simbolos.add_struct(False , self.id, self.parametros)
@@ -472,18 +439,21 @@ class definicion_funcion(instruccion):
         self.linea = linea
         self.columna = columna
 
-    def  interpretar(self, tabla_simbolos, entorno = "Global"):
-        if(tabla_simbolos.get(self.id) == None and tabla_simbolos.get_func(self.id) == None):
-            tabla_simbolos.add_func(self.id, self.parametros, self.instrucciones)
-            parametros_print = []
-            for param in self.parametros:
-                if(param[1] is None):
-                    parametros_print.append(param[0])
-                else:
-                    parametros_print.append(param[0] + "::" + param[1])
-            tabla_simbolos.add_funcion_print(self.id, parametros_print, entorno, self.linea, self.columna)
-        else:
-            error("no es posible redefinir la constante '%s'"%(self.id), 'function', self.linea)
+    def  interpretar(self, tabla_simbolos, wr:write):
+        tabla_simbolos.addFunc(self.id)
+        tabla_simbolos  = ts(tabla_simbolos)
+        returnlbl = f"L{wr.getLabel()}"
+        tabla_simbolos.returnlbl = returnlbl
+
+        wr.addFunc(self.id, 1)
+        for param in self.parametros:
+            tabla_simbolos.add(param[0], param[1],  (param[1] == "String" or param[1] == "Struct"))
+
+        for inst in self.instrucciones:
+            inst.interpretar(tabla_simbolos,wr)
+
+        wr.place_label(returnlbl)
+        wr.endFunc()
 
 class instruccion_llamada_funcion(instruccion):
     def __init__(self, id, parametros, linea, columna):
@@ -492,69 +462,28 @@ class instruccion_llamada_funcion(instruccion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        
-        import copy
-        #ASIGNAER VALORES A TABLA DE SIMBOLOS
+    def interpretar(self, tabla_simbolos:ts, wr:write):
 
-        #CREAR NUEVA TABLA DE SIMBOLOS
-        tabla_simbolos_funcion = copy.deepcopy(tabla_simbolos)
+        parametros = []
+        if tabla_simbolos.getFunc(self.id) is not None:
+            size = tabla_simbolos.pos
+            for param in self.parametros:
+                parametros.append(param.interpretar(tabla_simbolos,wr))
+            temp = f"T{wr.getPointer()}"
 
-        #TOMAR INFOR PARAMETROS
-        info_func = tabla_simbolos.get_func(self.id)
-        # NO EXISTE ESA FUNCION
-        if info_func is None:
-            error("no existe la funcion '%s'"%(self.id), 'llamada funcion', self.linea)
-        nombres_parametros = info_func[1]
-        
-        #PARAMETROS AGREGADOS
-        count = 0
-        for param in self.parametros:
-            
-            nombre_parametro = nombres_parametros[count][0]
-            tipo_parametro = nombres_parametros[count][1]
-            valor_parametro = param.interpretar(tabla_simbolos)
-            if isinstance(valor_parametro,list) and (tipo_parametro == "Array" or tipo_parametro == 'None'):
-                pass
-            else:
-                if(tipo_parametro == valor_parametro.type.value) or tipo_parametro == None:
-                    pass
-                else:
-                    error("tipo de parametro '%s' incorrecto "%(nombre_parametro), "llamada funcion", self.linea)
+            wr.place_operation(temp, "P", size + 1, "+")
+            aux  = 0
+            for param in parametros:
+                aux += 1
+                wr.insert_stack(temp, param.value)
+                if aux != len(parametros):
+                    wr.place_operation(temp, temp, 1, "+")
+            wr.new_env(size)
+            wr.call_function(self.id)
+            wr.get_stack(temp, "P")
+            wr.return_evn(size)
 
-            existance = tabla_simbolos.get(nombre_parametro)
-            if isinstance(valor_parametro,list):
-                s = simbolo(nombre_parametro, valor_parametro, Tipo.Array, self.id, self.linea, self.columna)
-                if existance is None:
-                    # Agregar nuevo simbolo
-                    tabla_simbolos_funcion.add(s)
-                else:
-                    # Actualizar valor
-                    tabla_simbolos_funcion.update(s)  
-            else:
-
-                s = simbolo(nombre_parametro, valor_parametro.value, valor_parametro.type, self.id, self.linea, self.columna)
-                if existance is None:
-                    # Agregar nuevo simbolo
-                    tabla_simbolos_funcion.add(s)
-                else:
-                    # Actualizar valor
-                    tabla_simbolos_funcion.update(s)
-            count += 1
-
-        # EJECUTAR INSTRUCCIONES
-        for inst in info_func[2]:
-            try:
-                inst.interpretar(tabla_simbolos_funcion)
-            except BreakError:
-                error("instruccion 'break' fuera de un bucle", 'llamada funcion', self.linea)
-            except ContinueError:
-                error("instruccion 'continie' fuera de un bucle", 'llamada funcion', self.linea)
-            except ReturnError as r:
-                return r.expresion
-        # print("TABLA FUNCION")
-        # tabla_simbolos_funcion.print()
-        # print("FIN TABLA FUNCION")
+            return valorExpresion(temp, Tipo.Float64, True)
 
 class instruccion_return(instruccion):
 
@@ -563,29 +492,26 @@ class instruccion_return(instruccion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        #tabla_simbolos.print()
-        if isinstance(self.expresion, dict):
-            valor = self.expresion
-            parametros_interpretados = []
-            for param in valor["parametros"]:
-                try:
-                    a = param.value
-                    parametros_interpretados.append(param)
-                except Exception:
-                    parametros_interpretados.append(param.interpretar(tabla_simbolos))
-            valor["parametros"] = parametros_interpretados
-            raise ReturnError(valor)
+    def interpretar(self,tabla_simbolos, wr:write):
+        if tabla_simbolos.returnlbl == "":
+            print("ERROR RETURN FUERA DE FUNCION")
+
+        valor = self.expresion.interpretar(tabla_simbolos,wr)
+        if valor.type == Tipo.Bool:
+            temp = f"L{wr.getLabel()}"
+            wr.place_label(temp)
+            wr.place_label(valor.truelbl)
+            wr.insert_stack('P', '1')
+            wr.place_goto(temp)
+
+            wr.place_label(valor.falselbl)
+            wr.insert_stack('P', '0')
+
+            wr.place_label(temp)
         else:
-            valor = self.expresion.interpretar(tabla_simbolos)
-            if isinstance(valor, list):
-                s = valorExpresion(valor, Tipo.Array)
-                raise ReturnError(s)
-            else:
-                #if isinstance(valor, expresion) or isinstance(valor, valorExpresion):
-                raise ReturnError(valor)
-                #else:
-                # error("se esperaba un valor de expresion para retornar", "return", self.linea)
+            wr.insert_stack('P', valor.value)
+        wr.place_goto(tabla_simbolos.returnlbl)
+
 
 class instruccion_push(instruccion):
     def __init__(self, array, expresion, linea, columna):

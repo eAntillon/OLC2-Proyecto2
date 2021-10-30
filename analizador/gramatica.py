@@ -338,10 +338,15 @@ def p_tipo_expresion(t):
 def p_definicion_tipo(t):
     '''definicion_tipo  :   DOSPT DOSPT tipo
                         |   empty'''
-    
+    if t[1] is not None:
+        t[0] = t[3]
+    else:
+        t[0] = None
+
 def p_definicion_tipo_struct(t):
     '''definicion_tipo  :   DOSPT DOSPT ID'''
-    
+    t[0] = t[3]
+
 def p_expresion_id(t):
     '''expresion_id  : ID'''
     line = t.lexer.lineno
@@ -457,12 +462,15 @@ def p_while(t):
     '''instruccion_while    :   WHILE expresion instrucciones'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = instruccion_while(t[2],t[3],line,col)
+
 
 # INSTRUCCION FOR
 def p_for_range(t):
     '''instruccion_for  :   FOR ID IN expresion_range instrucciones'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = instruccion_for(t[2], t[4],t[5],line,col)
 
 def p_for_string(t): 
     '''instruccion_for  :   FOR ID IN expresion instrucciones'''
@@ -479,12 +487,14 @@ def p_break(t):
     '''instruccion_break : BREAK '''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = instruccion_break(line, col)
 
 # INSTRUCCION CONTINUE
 def p_continue(t):
     '''instruccion_continue : CONTINUE '''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = instruccion_continue(line, col)
 
 # INSTRUCCION PRINT
 def p_print_lista_expresiones(t):
@@ -508,6 +518,7 @@ def p_tipo(t):
             |   CHAR
             |   STRING
             |   LIST'''
+    t[0] = t[1]
 
 # STRUCT
 def p_definicion_struct(t):
@@ -517,12 +528,14 @@ def p_definicion_struct(t):
 
 def p_parametros_struct(t):
     '''parametros_struct :  param_struct PTCOMA parametros_struct'''
+    t[0] = [t[1]] + t[3]
 
 def p_parametros_struct_unico(t):
     '''parametros_struct : param_struct PTCOMA'''
-
+    t[0] = [t[1]]
 def p_param_struc_tipo(t):
     '''param_struct : ID definicion_tipo'''
+    t[0] = [t[1], t[2]]
 
 def p_tipo_struct(t):
     '''tipo_struct  :   MUTABLE
@@ -558,8 +571,7 @@ def p_asignacion_prop_struct_array(t):
 # DEFINICION FUNCION
 def p_definicion_funcion(t):
     '''definicion_funcion   :   FUNCTION ID PARIZQ parametros_funcion PARDER instrucciones'''
-    line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    t[0] = definicion_funcion(t[2], t[4], t[6], t.lineno(1), t.lexpos(1))
 
 # DEFINICION FUNCION SIN PARAMETROS
 def p_definicion_funcion_noParam(t):
@@ -570,34 +582,40 @@ def p_definicion_funcion_noParam(t):
 # LISTA PARAMETROS
 def p_lista_identicadores(t):
     '''parametros_funcion  :   param_func COMA parametros_funcion'''
+    t[0] = [t[1]] + t[3]
 
 def p_lista_identicadores_unico(t):
     '''parametros_funcion : param_func '''
-
+    t[0] = [t[1]]
 def p_param_func(t):
     '''param_func   :   ID definicion_tipo'''
+    t[0] = [t[1], t[2]]
 
 # LLAMADA FUNCION O STRUCT CON PARAMETROS
 def p_asignacion_funcion_struct(t):
     '''llamada_funcion_struct    :   ID PARIZQ lista_expresiones PARDER'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = instruccion_llamada_funcion(t[1], t[3], t.lineno(1), t.lexpos(1))
 
 # LLAMADA FUNCION O STRUCT SIN PARAMETROS
 def p_asignacion_funcion_struct_vacio(t):
     '''llamada_funcion_struct    :   ID PARIZQ empty PARDER'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = instruccion_llamada_funcion(t[1], [], t.lineno(1), t.lexpos(1))
 
 def p_instruccion_return(t):
     '''instruccion_return   :   RETURN expresion
                             |   RETURN expresion_array'''
+    t[0] = instruccion_return(t[2], t.lineno(1), t.lexpos(1))
 
 def p_instruccion_global(t):
     '''instruccion_global   : GLOBAL ID'''
 
 def p_empty(t):
-     'empty :'
+    'empty :'
+    t[0] = None
 
 def p_error(p):
      # get formatted representation of stack

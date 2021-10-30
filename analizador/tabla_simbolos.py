@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-
 from enum import Enum
+
 class Tipo(Enum):
     Int64 = "Int64"
     Float64 = "Float64"
@@ -11,31 +11,28 @@ class Tipo(Enum):
     Array = "Array"
     Struct = "Struct"
 
-
 @dataclass
 class simbolo():
 
     id: str
-    valor: any
     tipo: Tipo
-    entorno: str
     apuntador: int
     line: int
     col: int
 
-    def __init__(self, id, tipo, entorno, apuntador, linea, columna):
+    def __init__(self, id, tipo, apuntador, isGlobal, isHeap, tipoStruct):
         self.id = id
-        self.tipo = tipo
-        self.entorno = entorno
+        self.tipo = tipo    
         self.apuntador = apuntador
-        self.line = linea
-        self.col = columna
+        self.isGlobal = isGlobal
+        self.inHeap = isHeap
+        self.structType = tipoStruct
 
     def print(self):
-        print("id: ",self.id, ", tipo: ", self.tipo.value, "apuntador: ", self.apuntador, ", entorno: ", self.entorno, ", linea: ", self.linea, ", columna: ")
+        print("id: ",self.id, ", tipo: ", self.tipo.value, "apuntador: ", self.apuntador)
     
     def toString(self):
-        return "id: %s, tipo: %s, apuntador: %s,entorno: %s, linea: %s, columa: %s"%(self.id, self.tipo.value, self.apuntador,self.entorno, self.line, self.col)
+        return "id: %s, tipo: %s, apuntador: %s"%(self.id, self.tipo.value, self.apuntador)
 
     def arrayString(self, array):
         lista = []
@@ -64,28 +61,74 @@ class simbolo():
 
 class tabla_simbolos():
 
-    def __init__(self, simbolos={}, structs ={}, variables_struct ={}, funcs ={}):
-        self.simbolos = simbolos
-        self.structs = structs # INFORMACION DE STRUCTS
-        self.variable_struct = variables_struct # VARIABLES Y SU TIPO DE STRUCT
-        self.funcs = funcs # FUNCIONES
-        self.funciones_print = []
-        self.pos = 1
+    simbolos = {} # DICT CON VARIABLES
+    structs = {} # INFORMACION DE STRUCTS
+    variable_struct = {} # VARIABLES Y SU TIPO DE STRUCT
+    funcs = {} # FUNCIONES
+    funciones_print = []
+    pos = 1
+    cicloInicio = ""
+    cicloFinal = ""
+    returnlbl = ""
 
-    def add(self, simbolo):
-        self.simbolos[simbolo.id] = simbolo
+    entorno = None
+
+    def __init__(self, ts = None):
+        if ts is not None:
+            self.simboslos = ts.simbolos
+            self.structs = ts.structs
+            self.variable_struct = ts.variable_struct
+            self.funcs =ts.funcs
+            self.funciones_print =ts.funciones_print
+            self.pos = 1
+            self.cicloInicio = ts.cicloInicio
+            self.cicloFinal = ts.cicloFinal
+            self.returnlbl = ts.returnlbl
+            self.entorno = True
+        else:
+            self.simboslos = {} # DICT CON VARIABLES
+            self.structs = {} # INFORMACION DE STRUCTS
+            self.variable_struct = {} # VARIABLES Y SU TIPO DE STRUCT
+            self.funcs = {} # FUNCIONES
+            self.funciones_print = []
+            self.pos = 1
+            self.cicloInicio = ""
+            self.cicloFinal = ""
+            self.returnlbl = ""
+
+
+    def newEnv(self, nombre):
+        self.entorno = nombre
+        self.ent_pos = 1
+
+    def returnEnv(self):
+        self.entorno = None
+        self.ent_pos = 1
+
+    def add(self, id, tipo, inHeap, strucType = ""):
+        simb = simbolo(id,tipo, self.pos, True, inHeap, strucType)
+        self.simbolos[simb.id] = simb
         self.pos += 1
+        
     
     def get(self, id):
         ''' Retorna el simbolo si existe, sino devuelve None'''
         return self.simbolos.get(id, None)
     
+    def addFunc(self, id):
+        self.funcs[id] = id
+
+    def getFunc(self, id):
+        return self.funcs.get(id, None)
+
     def getPos(self):
         return self.pos
 
-    def update(self, simbolo):
-        if(simbolo.id in self.simbolos.keys()):
-            self.simbolos.update({simbolo.id : simbolo})
+    def update(self, id, tipo):
+        if(id in self.simbolos.keys()):
+            simb = self.simbolos[id]
+            simb.tipo = tipo
+            self.simbolos.update({id : simb})
             return True
         else:
             return False
@@ -98,6 +141,7 @@ class tabla_simbolos():
             return False
 
     def clean(self):
+        self.simbolos_ent = {}
         self.simbolos = {}
         self.structs = {} # INFORMACION DE STRUCTS
         self.variable_struct = {} # VARIABLES Y SU TIPO DE STRUCT
@@ -105,8 +149,8 @@ class tabla_simbolos():
 
     def print(self):
         print("--- Tabla de simbolos ---")
-        if len(self.simbolos) > 0:
-            for s in self.simbolos.values():
+        if len(cls.simbolos) > 0:
+            for s in cls.simbolos.values():
                 print(" ->", s.toString())
         else:
             print("Tabla vacia")

@@ -1,6 +1,6 @@
 import gramatica as g
 from tabla_simbolos import tabla_simbolos
-from write import write, pointer
+from write import write
 import traceback
 
 def interpretar():
@@ -17,7 +17,6 @@ def interpretar():
         for inst in instrucciones:
             inst.interpretar(ts,wr)
         wr.print()
-        ts.print()
     except Exception as e:
         print(traceback.format_exc())
         output = str(e)

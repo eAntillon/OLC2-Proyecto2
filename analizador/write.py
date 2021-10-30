@@ -1,30 +1,11 @@
-
-class pointer():
-
-    contador = -1
-    label = -1
-
-    def getPointer(self):
-        self.contador +=1
-        return self.contador
-    def getLastPointer(self):
-        return self.contador
-
-    def getLabel(self):
-        self.label +=1
-        return self.label
-    
-    def getLastLabel(self):
-        return self.label
-
 class write():
 
     def __init__(self):
         self.contador = 0
         self.label = 0
         self.code = ''
-        self.funciones = ' '
-        self.nativas = ' '
+        self.funciones = ''
+        self.nativas = ''
         self.in_native = False
         self.in_function = False
         self.texto_print = self.get_printString()
@@ -84,12 +65,12 @@ class write():
         if self.in_native:
             if self.natives == '':
                 # comentario
-                self.natives += '/*----native functions----*/\n'
+                self.natives += '/* funciones nativas */\n'
             self.natives = self.natives + tab + codigo
         # escribir en funciones
         elif self.in_function:
             if self.funciones == '':
-                self.funciones += '/*----functions----*/\n'
+                self.funciones += '/* funciones */\n'
             self.funciones += tab + codigo 
         else:
             self.code += '\t' + codigo
@@ -132,6 +113,23 @@ class write():
 
     def new_env(self, tamano):
         self.insert_code(f'P=P+{tamano};\n')
+
+    def addFunc(self, id, tipoFunc):
+        if(not self.in_native):
+            self.in_function = True
+        if tipoFunc == 1:
+            self.in_function = True
+        else:
+            self.in_native = True
+        self.insert_code(f'func {id}(){{\n', '')
+
+    def endFunc(self):
+        
+        self.insert_code('return;\n}\n');
+        self.in_function = False
+        self.in_native = False
+        if(not self.in_native):
+            self.in_function = False
 
     def call_function(self, id):
         self.insert_code(f'{id}();\n')

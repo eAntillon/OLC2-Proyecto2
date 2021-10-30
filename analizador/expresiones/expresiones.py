@@ -1,8 +1,8 @@
 import sys, math
 
-from analizador.write import write, pointer
+from analizador.write import write
 sys.path.append('../')
-from analizador.tabla_simbolos import simbolo, Tipo
+from analizador.tabla_simbolos import simbolo, Tipo, tabla_simbolos
 from analizador.error import error
 from abc import ABC, abstractmethod
 
@@ -10,6 +10,8 @@ class expresion:
 
     valor = None
     label = 'expresion'
+    truelbl = ''
+    falselbl = ''
 
     @abstractmethod
     def interpretar(self):
@@ -17,9 +19,10 @@ class expresion:
 
 class valorExpresion(expresion):
 
-    def __init__(self, value, type, true = '', false = ''):
+    def __init__(self, value, type, isTemp, true = '', false = ''):
         self.value = value
         self.type = type
+        self.isTemp = isTemp
         self.truelbl = true
         self.falselbl = false
 
@@ -46,9 +49,10 @@ class validar_tipo_expresion(expresion):
         self.tipo = tipo
         self.linea = linea
         self.columna = columna
+        self.auxType = ""
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        valor = self.expresion.interpretar(tabla_simbolos)
+    def interpretar(self, wr):
+        valor = self.expresion.interpretar(wr)
         if(isinstance(valor, (list, dict))):
             return valor
         if(self.tipo == valor.type.value or self.tipo == None):
@@ -64,31 +68,31 @@ class expresion_primitiva(expresion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self, tabla_simbolos, wr:write, true = "", false = ""):      
+    def interpretar(self, tabla_simbolos, wr:write):      
         tipo_dato = None
         valor_interpretado = self.valor
         if(type(self.valor) is str):
             if len(self.valor) == 0:
                 return None      
             elif(self.valor.upper() == "TRUE"):
-                # BOOL VALIDO
-                tipo_dato = Tipo.Bool
-                valor_interpretado = 1
-                
-                if true == "":
-                    true = f"L{wr.getLabel()}"
-                if false == "":
-                    false = f"L{wr.getLabel()}"
+                if self.truelbl == "":
+                    self.truelbl = f"L{wr.getLabel()}"
+                if self.falselbl == "":
+                    self.falselbl = f"L{wr.getLabel()}"
+                wr.place_goto(self.truelbl);
+                wr.place_goto(self.falselbl);
+                return valorExpresion(1, Tipo.Bool, False, self.truelbl, self.falselbl)
                 
             elif(self.valor.upper() == "FALSE"):
-                # BOOL VALIDO
-                tipo_dato = Tipo.Bool
-                valor_interpretado = 0
-                if true == "":
-                    true = f"L{wr.getLabel()}"
-                if false == "":
-                    false = f"L{wr.getLabel()}"
-                
+                if self.truelbl == "":
+                    self.truelbl = f"L{wr.getLabel()}"
+                if self.falselbl == "":
+                    self.falselbl = f"L{wr.getLabel()}"
+                wr.place_goto(self.falselbl);
+                wr.place_goto(self.truelbl);
+                return valorExpresion(0, Tipo.Bool, False, self.truelbl, self.falselbl)
+
+
             elif(self.valor[0] =="'" and len(self.valor) == 3 and self.valor[-1] == "'"):
                 # CHAR VALIDO
                 tipo_dato = Tipo.Char
@@ -99,7 +103,7 @@ class expresion_primitiva(expresion):
             else:
                 # agregar a heap
                 temp = f"T{wr.getPointer()}"
-                wr.insert_code(f"{temp} = H;")
+                wr.place_operation(temp, "H", "", "")
                 for ch in self.valor:
                     wr.insert_heap("H", ord(ch))
                     wr.next_heap()
@@ -119,7 +123,7 @@ class expresion_primitiva(expresion):
         else:
             error("tipo no definido","expresion", self.linea)
         
-        return valorExpresion(valor_interpretado, tipo_dato, true, false)
+        return valorExpresion(valor_interpretado, tipo_dato, False)
         
 class expresion_id(expresion):
 
@@ -128,25 +132,30 @@ class expresion_id(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos,wr:write,true = "", false = "" ):
-        valor_interpretado = tabla_simbolos.get(self.valor)
-        if(valor_interpretado is not None):
+    def interpretar(self, tabla_simbolos, wr:write):
+        valor = tabla_simbolos.get(self.valor)
+        wr.comment("ACCESO ID")
+        if (valor is not None):
             tempValue = f"T{wr.getPointer()}"
-            wr.get_stack(tempValue,valor_interpretado.apuntador)
-            if valor_interpretado.tipo == Tipo.Bool:
-                if true == "":
-                    truelbl = f"L{wr.getLabel()}"
-                else:
-                    truelbl = true
-                if false == "":
-                    falselbl = f"L{wr.getLabel()}"
-                else:
-                    falselbl = false
-                wr.place_if(tempValue,1,"==",truelbl)
-                wr.place_goto(falselbl)
-                return valorExpresion(tempValue, valor_interpretado.tipo, truelbl, falselbl)
+            tempos = valor.apuntador
+            if tabla_simbolos.entorno is not None:
+                tempos = f"T{wr.getPointer()}"
+                wr.place_operation(tempos, "P", valor.apuntador, "+")
+            wr.get_stack(tempValue,tempos)
+            if valor.tipo == Tipo.Bool:
+                if self.truelbl == "":
+                    self.truelbl = f"L{wr.getLabel()}"
+                if self.falselbl == "":
+                    self.falselbl = f"L{wr.getLabel()}"
+
+                wr.place_if(tempValue,1,"==",self.truelbl)
+                wr.place_goto(self.falselbl)
+                r = valorExpresion(tempValue, valor.tipo, False)
+                r.truelbl = self.truelbl
+                r.falselbl = self.falselbl
+                return r
             else:
-                return valorExpresion(tempValue, valor_interpretado.tipo)
+                return valorExpresion(tempValue, valor.tipo, False)
         else:
             error("variable %s no definida"%(self.valor), "expresion id", self.linea)
 
@@ -159,10 +168,10 @@ class expresion_binaria(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, wr:write, true = "", false = ""):
+    def interpretar(self, tabla_simbolos, wr:write):
         
         # operacion normal binaria
-        if self.operador in ["+", "-", "*", "%", "/"]:
+        if self.operador in ["+", "-", "*", "/"]:
             expI = self.expI.interpretar(tabla_simbolos,wr)
             expD = self.expD.interpretar(tabla_simbolos,wr)
             # interpretar si es exp 
@@ -176,14 +185,15 @@ class expresion_binaria(expresion):
             if self.operador == "*":
                 if expI.type == Tipo.String and expD.type == Tipo.String:
                     pass
+
             temp = f"T{wr.getPointer()}"
             wr.place_operation(temp, expI.value, expD.value, self.operador)
             
             if expI.type == Tipo.Float64 or expD.type == Tipo.Float64:
-                return valorExpresion(temp, Tipo.Float64)
+                return valorExpresion(temp, Tipo.Float64, True)
             if self.operador == "/":
-                return valorExpresion(temp, Tipo.Float64)
-            return valorExpresion(temp, Tipo.Int64)
+                return valorExpresion(temp, Tipo.Float64, True)
+            return valorExpresion(temp, Tipo.Int64, True)
 
         elif self.operador == "^":
             expI = self.expI.interpretar(tabla_simbolos,wr)
@@ -200,118 +210,102 @@ class expresion_binaria(expresion):
                     pass
         elif self.operador in [">", "<", ">=", "<=", "==", "!="]:
             expI = self.expI.interpretar(tabla_simbolos,wr)
-            expD = self.expD.interpretar(tabla_simbolos,wr)
-            # interpretar si es exp 
             if isinstance(expI,valorExpresion) is False:
                 expI = self.expI.interpretar(tabla_simbolos,wr)
 
-            # interpretar si es exp 
-            elif isinstance(expD,valorExpresion) is False:
+            ret = valorExpresion(None, Tipo.Bool, False)
+            expD = None
+
+            if expI.type != Tipo.Bool:
                 expD = self.expD.interpretar(tabla_simbolos,wr)
+                if isinstance(expD,valorExpresion) is False:
+                    expD = self.expD.interpretar(tabla_simbolos,wr)
+                    
+                if (expI.type == Tipo.Int64 or expI.type == Tipo.Float64) and (expD.type == Tipo.Int64 or expD.type == Tipo.Float64):
+                    print("GOLA")
+                    if self.truelbl == '':
+                        self.truelbl = f"L{wr.getLabel()}"
+                    if self.falselbl == '':
+                        self.falselbl = f"L{wr.getLabel()}"
+                    wr.place_if(expI.value, expD.value, self.operador, self.truelbl)
+                    wr.place_goto(self.falselbl)
+                elif expD.type == Tipo.String and expD.type == Tipo.String:
+                    print("Comparacion de cadenas")
+            else:
+                gotoDer = f"L{wr.getLabel()}"
+                izqTemp = f"T{wr.getPointer()}"
 
-            if true == "":
-                true = f"L{wr.getLabel()}"
-            if false == "":
-                false = f"L{wr.getLabel()}"
-                
-            # if expI.type == Tipo.Bool and expI.value == "":
-            #     salida = f"L{wr.getLabel()}"
-            #     temp = f"T{wr.getPointer()}"
-            #     wr.place_label(expI.truelbl)
-            #     wr.place_operation(temp, 1)
-            #     wr.place_goto(salida)
-            #     wr.place_label(expI.falselbl)
-            #     wr.place_operation(temp, 0)
-            #     wr.place_label(salida)
-            #     expI.value = temp
+                wr.place_label(expI.truelbl)
+                wr.place_operation(izqTemp, "1", "", "")
+                wr.place_goto(gotoDer)
 
-            # elif expI.type == Tipo.Bool and expI.value != "":
-            #     wr.place_goto(expI.truelbl)
-            #     wr.place_goto(expI.falselbl)
-            #     salida = f"L{wr.getLabel()}"
-            #     temp = f"T{wr.getPointer()}"
-            #     wr.place_label(expI.truelbl)
-            #     wr.place_operation(temp, 1)
-            #     wr.place_goto(salida)
-            #     wr.place_label(expI.falselbl)
-            #     wr.place_operation(temp, 0)
-            #     wr.place_label(salida)
+                wr.place_label(expI.falselbl)
+                wr.place_operation(izqTemp, "0","","")
+                wr.place_label(gotoDer)
 
-            #     expI.value = temp
-            
-            # if expD.type == Tipo.Bool and expD.value == "":
-            #     wr.place_label(expD.truelbl)
-            #     wr.place_operation(temp, 1)
-            #     wr.place_goto(salida)
-            #     wr.place_label(expD.falselbl)
-            #     wr.place_operation(temp, 0)
-            #     wr.place_label(salida)
-
-            #     expD.value = temp
-            # elif expD.type == Tipo.Bool and expD.value != "":
-            #     wr.place_goto(expD.truelbl)
-            #     wr.place_goto(expD.falselbl)
-            #     salida = f"L{wr.getLabel()}"
-            #     temp = f"T{wr.getPointer()}"
-            #     wr.place_label(expD.truelbl)
-            #     wr.place_operation(temp, 1)
-            #     wr.place_goto(salida)
-            #     wr.place_label(expD.falselbl)
-            #     wr.place_operation(temp, 0)
-            #     wr.place_label(salida)
-            #     expD.value = temp
-
-            salida = f"L{wr.getLabel()}"
-            temp = f"T{wr.getPointer()}"
-            wr.comment("Expresion binaria")
-            wr.place_if(expI.value, expD.value, self.operador, true)
-            wr.place_goto(false)
-            wr.place_label(true)
-            wr.place_operation(temp, 1)
-            wr.place_goto(salida)
-            wr.place_label(false)
-            wr.place_operation(temp, 0)
-            wr.place_label(salida)
-            salida1 = f"L{wr.getLabel()}"
-            salida2 = f"L{wr.getLabel()}"
-
-            return valorExpresion(temp, Tipo.Bool, salida1, salida2)
+                expD = self.expD.interpretar(tabla_simbolos,wr)
+                if isinstance(expD,valorExpresion) is False:
+                    expD = self.expD.interpretar(tabla_simbolos,wr)
+                if expD.type != Tipo.Bool:
+                    print("No comparable")
+                final = f"L{wr.getLabel()}"
+                derTemp = f"T{wr.getPointer()}"
+                wr.place_label(expD.truelbl)
+                wr.place_operation(derTemp, "1", "", "")
+                wr.place_goto(final)
+                wr.place_label(expD.falselbl)
+                wr.place_operation(derTemp, "0", "", "")
+                wr.place_label(final)
+                if self.truelbl == '':
+                        self.truelbl = f"L{wr.getLabel()}"
+                if self.falselbl == '':
+                    self.falselbl = f"L{wr.getLabel()}"
+                wr.place_if(izqTemp,derTemp, self.operador, self.truelbl)
+                wr.place_goto(self.falselbl)
+            ret.truelbl = self.truelbl
+            ret.falselbl = self.falselbl
+            return ret
 
         elif self.operador in ["||", "&&"]:
-            expI:valorExpresion = self.expI.interpretar(tabla_simbolos,wr, true, false)
-
-            if isinstance(expI,valorExpresion) is False:
-                expI = self.expI.interpretar(tabla_simbolos,wr)
+            wr.comment("EXPRESION RELACIONAL")
+            if self.truelbl == '':
+                        self.truelbl = f"L{wr.getLabel()}"
+            if self.falselbl == '':
+                self.falselbl = f"L{wr.getLabel()}"
+            etiqueta = ''
             
             if self.operador == "&&":
-                expD:valorExpresion = self.expD.interpretar(tabla_simbolos,wr, "", expI.falselbl)
-                if isinstance(expD,valorExpresion) is False:
-                    expD = self.expD.interpretar(tabla_simbolos,wr, "", expI.falselbl)
-                salida = f"L{wr.getLabel()}"
-                true = f"L{wr.getLabel()}"
-                false = f"L{wr.getLabel()}"
-                wr.place_if(expI.value, 1, "==", true)
-                wr.place_goto(false)
-                wr.place_label(true)
-                wr.place_if(expD.value, 1, "==", salida)
-                return valorExpresion("", Tipo.Bool, salida, false)
+                etiqueta = f"L{wr.getLabel()}"
+                self.expI.truelbl = etiqueta
+                self.expD.truelbl = self.truelbl
+                self.expI.falselbl = self.falselbl
+                self.expD.falselbl = self.falselbl
+                
+            elif self.operador == "||":
+                etiqueta = f"L{wr.getLabel()}"
+                self.expI.truelbl = self.truelbl
+                self.expD.truelbl = self.truelbl
+                etiqueta = f"L{wr.getLabel()}"
+                self.expI.falselbl = etiqueta
+                self.expD.falselbl = self.falselbl
+            else:
+                print("NOT")
+            expI = self.expI.interpretar(tabla_simbolos,wr)
+            if isinstance(expI,valorExpresion) is False:
+                expI = self.expI.interpretar(tabla_simbolos,wr)
+            if expI.type != Tipo.Bool:
+                print("ERROR")
+                return
+            wr.place_label(etiqueta)
+            expD:valorExpresion = self.expD.interpretar(tabla_simbolos,wr)
+            if isinstance(expD,valorExpresion) is False:
+                expD = self.expD.interpretar(tabla_simbolos,wr)
             
-            if self.operador == "||":
-                expD:valorExpresion = self.expD.interpretar(tabla_simbolos,wr, expI.truelbl, "")
-                if isinstance(expD,valorExpresion) is False:
-                    expD = self.expD.interpretar(tabla_simbolos,wr, expI.truelbl, "")
-                salida = f"L{wr.getLabel()}"
-                true = f"L{wr.getLabel()}"
-                false = f"L{wr.getLabel()}"
-                wr.place_if(expI.value, 1, "==", true)
-                wr.place_goto(false)
-                wr.place_label(false)
-                wr.place_if(expD.value, 1, "==", true)
-                return valorExpresion("", Tipo.Bool, true, salida)
-
-        # escribir validacion en go
-        # elif self.operador == "/":
-        #     pass
+            r = valorExpresion(None, Tipo.Bool, False)
+            r.truelbl = self.truelbl
+            r.falselbl = self.falselbl
+            return r
+            
 
 class expresion_nativa(expresion):
     def __init__(self, funcion, expresion, linea, columna):
@@ -320,7 +314,7 @@ class expresion_nativa(expresion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
+    def interpretar(self,  entorno = "Global"):
         exp = self.expresion.interpretar(tabla_simbolos)
         
         if isinstance(exp,list):
@@ -399,7 +393,7 @@ class expresion_nativa_log(expresion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
+    def interpretar(self,  entorno = "Global"):
         
         if(self.op == "log"):
             exp1 = self.expresion1.interpretar(tabla_simbolos)
@@ -455,7 +449,7 @@ class expresion_array(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
+    def interpretar(self,  entorno = "Global"):
         valores = []
         for val in self.expresiones:
             valor = val.interpretar(tabla_simbolos)
@@ -469,7 +463,7 @@ class expresion_acceso_array(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
+    def interpretar(self,  entorno = "Global"):
         simbolo = tabla_simbolos.get(self.id)
         array = simbolo.valor
         if(array is None):
@@ -512,7 +506,7 @@ class expression_array_range(expresion):
         self.range = range
         self.linea = linea
         self.columna = columna
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
+    def interpretar(self,  entorno = "Global"):
         simbolo = tabla_simbolos.get(self.id)
         posiciones = self.range.interpretar(tabla_simbolos)
         array = simbolo.valor
