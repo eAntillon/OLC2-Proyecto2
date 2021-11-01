@@ -9,6 +9,7 @@ class write():
         self.in_native = False
         self.in_function = False
         self.texto_print = self.get_printString()
+        self.nativasAgregadas = []
         
     def get_header(self):
         header = "package main; \nimport ( \"fmt\" );\n"
@@ -162,3 +163,50 @@ class write():
         f = open('./salida.go', 'w')
         f.write(self.get_code())
         f.close()
+
+    def addPotencia(self):
+        if "potenNativeFunc" in self.nativasAgregadas:
+            return
+        i = 0
+        e = []
+        l = []
+        while i < 17:
+            e.append(f"T{self.getPointer()}")
+            i += 1
+        j = 0
+        while j < 4:
+            l.append(f"L{self.getLabel()}")
+            j += 1
+        self.nativasAgregadas.append("potenNativeFunc")
+        self.nativas += "func potenNativeFunc(){" + f"""
+    {e[1]}=P+1; 
+    {e[0]}=stack[int({e[1]})];
+    {e[2]}=P+3; 
+    stack[int({e[2]})]={e[0]};
+    {l[1]}:
+    {e[4]}=P+2; 
+    {e[3]}=stack[int({e[4]})];
+    if {e[3]}>1.0 """ + "{goto " + f"""{l[2]}""" + "}" + f""";
+    goto """ + f"""{l[3]};
+    {l[2]}:
+    {e[6]}=P+3; 
+    {e[5]}=stack[int({e[6]})];
+    {e[8]}=P+1; 
+    {e[7]}=stack[int({e[8]})];
+    {e[9]}={e[5]}*{e[7]}; 
+    {e[10]}=P+3; 
+    stack[int({e[10]})]={e[9]};
+    {e[12]}=P+2; 
+    {e[11]}=stack[int({e[12]})];
+    {e[13]}={e[11]}-1.0; 
+    {e[14]}=P+2; 
+    stack[int({e[14]})]={e[13]};
+    goto """ + f"""{l[1]};
+    {l[3]}:
+    {e[16]}=P+3; 
+    {e[15]}=stack[int({e[16]})];
+    stack[int(P)]={e[15]};
+    goto """ + f"""{l[0]};
+    {l[0]}:
+    return;
+""" + "}"
