@@ -75,18 +75,18 @@ class tabla_simbolos():
 
     def __init__(self, ts = None):
         if ts is not None:
-            self.simboslos = ts.simbolos
+            self.simbolos = ts.simbolos
             self.structs = ts.structs
             self.variable_struct = ts.variable_struct
             self.funcs =ts.funcs
             self.funciones_print =ts.funciones_print
-            self.pos = 1
+            self.pos = ts.pos
             self.cicloInicio = ts.cicloInicio
             self.cicloFinal = ts.cicloFinal
             self.returnlbl = ts.returnlbl
             self.entorno = True
         else:
-            self.simboslos = {} # DICT CON VARIABLES
+            self.simbolos = {} # DICT CON VARIABLES
             self.structs = {} # INFORMACION DE STRUCTS
             self.variable_struct = {} # VARIABLES Y SU TIPO DE STRUCT
             self.funcs = {} # FUNCIONES
@@ -106,7 +106,7 @@ class tabla_simbolos():
         self.ent_pos = 1
 
     def add(self, id, tipo, inHeap, strucType = ""):
-        simb = simbolo(id,tipo, self.pos, True, inHeap, strucType)
+        simb = simbolo(id,tipo, self.pos, (self.entorno == None), inHeap, strucType)
         self.simbolos[simb.id] = simb
         self.pos += 1
         
