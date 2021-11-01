@@ -414,6 +414,7 @@ def p_expresion_nativa_parametros(t):
 def p_expresion_range(t):
     '''expresion_range  :   expresion DOSPT expresion
                         |   tipo_expresion DOSPT tipo_expresion'''
+    t[0] = [t[1], t[3]]
     
 def p_expresion_nothing(t):
     '''expresion_nothing : NOTHING'''
@@ -471,6 +472,8 @@ def p_for_range(t):
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
     t[0] = instruccion_for(t[2], t[4],t[5],line,col)
+
+
 
 def p_for_string(t): 
     '''instruccion_for  :   FOR ID IN expresion instrucciones'''
@@ -570,14 +573,15 @@ def p_asignacion_prop_struct_array(t):
 
 # DEFINICION FUNCION
 def p_definicion_funcion(t):
-    '''definicion_funcion   :   FUNCTION ID PARIZQ parametros_funcion PARDER instrucciones'''
-    t[0] = definicion_funcion(t[2], t[4], t[6], t.lineno(1), t.lexpos(1))
+    '''definicion_funcion   :   FUNCTION ID PARIZQ parametros_funcion PARDER definicion_tipo instrucciones'''
+    t[0] = definicion_funcion(t[2], t[4], t[7], t.lineno(1), t.lexpos(1))
 
 # DEFINICION FUNCION SIN PARAMETROS
 def p_definicion_funcion_noParam(t):
-    '''definicion_funcion   :   FUNCTION ID PARIZQ empty PARDER instrucciones'''
+    '''definicion_funcion   :   FUNCTION ID PARIZQ empty PARDER definicion_tipo instrucciones'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = definicion_funcion(t[2], [], t[7], t.lineno(1), t.lexpos(1))
 
 # LISTA PARAMETROS
 def p_lista_identicadores(t):
