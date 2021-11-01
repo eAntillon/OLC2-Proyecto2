@@ -204,15 +204,29 @@ class expresion_binaria(expresion):
             # interpretar si es exp 
             elif isinstance(expD,valorExpresion) is False:
                 expD = self.expD.interpretar(tabla_simbolos,wr)
-                if expI.type == Tipo.String and expD.type == Tipo.Int64:
-                    pass
-                elif expI.type == Tipo.Int64 and expD.type == Tipo.String:
-                    pass
+            if expI.type == Tipo.String and expD.type == Tipo.Int64:
+                pass
+            elif expI.type == Tipo.Int64 and expD.type == Tipo.String:
+                pass
+            else:
+                temp = f"T{wr.getPointer()}"
+                wr.place_operation(temp, "P", 2, "+")
+                wr.insert_stack(temp, expI.value)
+                wr.place_operation(temp, temp, 1, "+")
+                wr.insert_stack(temp, expD.value)
+                wr.new_env(1)
+                wr.call_function("potenNativeFunc")
+                wr.get_stack(temp, "P")
+                wr.return_evn(1)
+                wr.addPotencia()
+                return valorExpresion(temp, Tipo.Float64, True)
+
+            
+
         elif self.operador in [">", "<", ">=", "<=", "==", "!="]:
             expI = self.expI.interpretar(tabla_simbolos,wr)
             if isinstance(expI,valorExpresion) is False:
                 expI = self.expI.interpretar(tabla_simbolos,wr)
-
             ret = valorExpresion(None, Tipo.Bool, False)
             expD = None
 
@@ -222,7 +236,6 @@ class expresion_binaria(expresion):
                     expD = self.expD.interpretar(tabla_simbolos,wr)
                     
                 if (expI.type == Tipo.Int64 or expI.type == Tipo.Float64) and (expD.type == Tipo.Int64 or expD.type == Tipo.Float64):
-                    print("GOLA")
                     if self.truelbl == '':
                         self.truelbl = f"L{wr.getLabel()}"
                     if self.falselbl == '':

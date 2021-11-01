@@ -1,5 +1,5 @@
 from re import S
-from analizador.expresiones.expresiones import valorExpresion, expresion
+from analizador.expresiones.expresiones import expresion_binaria, valorExpresion, expresion
 import sys
 sys.path.append('../')
 from analizador.tabla_simbolos import simbolo, Tipo, tabla_simbolos as  ts
@@ -27,9 +27,14 @@ class asignacion(instruccion):
         # ASIGNAR EXPRESION
         expresion = self.expresion.interpretar(tabla_simbolos,wr)
         existance:simbolo = tabla_simbolos.get(self.id)
-        # AGregar un simbolo nuevo
+
         if existance is not None:
-            wr.insert_stack(existance.apuntador,expresion.value)
+            if tabla_simbolos.entorno is not None:
+                pos = f"T{wr.getPointer()}"
+                wr.place_operation(pos, "P", existance.apuntador, "+")
+                wr.insert_stack(pos,expresion.value)
+            else:
+                wr.insert_stack(existance.apuntador,expresion.value)
         else:
             tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
             expresion1 = tabla_simbolos.get(self.id)
@@ -179,7 +184,6 @@ class instruccion_while(instruccion):
         wr.place_label(inicio)
 
         valor = self.expresion.interpretar(tabla_simbolos,wr)
-        print("VALOR", valor)
 
         tabla_simbolos = ts(tabla_simbolos)
         tabla_simbolos.cicloInicio = inicio
@@ -198,131 +202,85 @@ class instruccion_while(instruccion):
         tabla_simbolos.cicloFinal = ""
 
 class instruccion_for(instruccion):
-    def __init__(self, id, expresion, instrucciones,tipo, linea, columna):
+    def __init__(self, id, expresion, instrucciones, linea, columna):
         self.id = id
         self.expresion = expresion
         self.instrucciones = instrucciones
-        self.tipo = tipo
         self.line = linea
         self.col = columna
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        # FOR RANGE
-        if self.tipo == "range":
-            
-            posiciones = self.expresion.interpretar(tabla_simbolos)
-            if(len(posiciones) > 0):
-                exp = valorExpresion(posiciones[0], Tipo.Int64)
-                sim = simbolo(self.id, exp.value, Tipo.Int64, entorno, self.line, self.col)
-                tabla_simbolos.add(sim)
-                for i in posiciones:
-                    try:
-                        if(i != posiciones[0]):
-                            exp = valorExpresion(i, Tipo.Int64)
-                            sim = simbolo(self.id, exp.value, Tipo.Int64, entorno, self.line, self.col)
-                            tabla_simbolos.update(sim)
-                        for instruccion in self.instrucciones:
-                            try:
-                                instruccion.interpretar(tabla_simbolos)
-                            except BreakError:
-                                raise BreakError()
-                            except ContinueError:
-                                raise ContinueError()
-                    except BreakError:
-                        break
-                    except ContinueError:
-                        continue
+    def interpretar(self, tabla_simbolos, wr:write):
+        expresion = self.expresion[0].interpretar(tabla_simbolos,wr)
+        rangeD = self.expresion[1].interpretar(tabla_simbolos,wr)
+
+        # ASIGNAR EXPRESION
+        tabla_simbolos = ts(tabla_simbolos)
+        existance:simbolo = tabla_simbolos.get(self.id)
+        pos = ""
+        if existance is not None:
+            if tabla_simbolos.entorno is not None:
+                pos = f"T{wr.getPointer()}"
+                wr.place_operation(pos, "P", existance.apuntador, "+")
+                wr.insert_stack(pos,expresion.value)
             else:
-                return
-        elif self.tipo == "array":
-            array = self.expresion.interpretar(tabla_simbolos)
-            if(isinstance(array, list)):
-                if(len(array) > 0):
-                    exp = array[0]
-                    sim = simbolo(self.id, exp.value, exp.type, entorno, self.line, self.col)
-                    tabla_simbolos.add(sim)
-                    for i in array:
-                        try:
-                            if(i != array[0]):
-                                exp = i
-                                if(isinstance(i, list)):
-                                    sim = simbolo(self.id, i, Tipo.Array, entorno, self.line, self.col)
-                                    tabla_simbolos.update(sim)
-                                else:
-                                    sim = simbolo(self.id, exp.value, exp.type, entorno, self.line, self.col)
-                                    tabla_simbolos.update(sim)
-                            for instruccion in self.instrucciones:
-                                try:
-                                    instruccion.interpretar(tabla_simbolos)
-                                except BreakError:
-                                    raise BreakError()
-                                except ContinueError:
-                                    raise ContinueError()
-                        except BreakError:
-                            break
-                        except ContinueError:
-                            continue
-        elif self.tipo == "expresion":
-            valor = self.expresion.interpretar(tabla_simbolos)
-            
-            posicion = 0
-            if(valor.type == Tipo.String):
-                if(len(valor.value) > 0):
-                    exp = valor.value[0]
-                    sim = simbolo(self.id, exp, valor.type, entorno, self.line, self.col)
-                    tabla_simbolos.add(sim)
-                    for i in valor.value:
-                        try:
-                            if(posicion > 0):
-                                exp = i
-                                if(isinstance(i, list)):
-                                    sim = simbolo(self.id, i, Tipo.Array, entorno, self.line, self.col)
-                                    tabla_simbolos.update(sim)
-                                else:
-                                    sim = simbolo(self.id, exp, valor.type, entorno, self.line, self.col)
-                                    tabla_simbolos.update(sim)
-                            for instruccion in self.instrucciones:
-                                try:
-                                    instruccion.interpretar(tabla_simbolos)
-                                except BreakError:
-                                    raise BreakError()
-                                except ContinueError:
-                                    raise ContinueError()
-                            posicion += 1
-                        except BreakError:
-                            break
-                        except ContinueError:
-                            continue
-            elif valor.type == Tipo.Array:
-                array = valor.value
-                if(len(array) > 0):
-                    exp = array[0]
-                    if isinstance(exp,list):
-                        sim = simbolo(self.id, exp, Tipo.Array, entorno, self.line, self.col)
-                    else:
-                        sim = simbolo(self.id, exp.value, exp.type, entorno, self.line, self.col)
-                    tabla_simbolos.add(sim)
-                    for i in array:
-                        try:
-                            if(i != array[0]):
-                                exp = i
-                                if(isinstance(i, list)):
-                                    sim = simbolo(self.id, i, Tipo.Array, entorno, self.line, self.col)
-                                    tabla_simbolos.update(sim)
-                                else:
-                                    sim = simbolo(self.id, exp.value, exp.type, entorno, self.line, self.col)
-                                    tabla_simbolos.update(sim)
-                            for instruccion in self.instrucciones:
-                                try:
-                                    instruccion.interpretar(tabla_simbolos)
-                                except BreakError:
-                                    raise BreakError()
-                                except ContinueError:
-                                    raise ContinueError()
-                        except BreakError:
-                            break
-                        except ContinueError:
-                            continue
+                wr.insert_stack(existance.apuntador,expresion.value)
+        else:
+            tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
+            expresion1 = tabla_simbolos.get(self.id)
+            pos = tabla_simbolos.getPos()
+            temp = f"L{wr.getLabel()}"
+            if tabla_simbolos.entorno is not None:
+                pos = f"T{wr.getPointer()}"
+                wr.place_operation(pos, "P", expresion1.apuntador, "+")
+
+            if expresion.type == Tipo.Bool:
+                
+                wr.place_label(expresion.truelbl)
+                wr.insert_stack(pos,1)
+                wr.place_goto(temp)
+                wr.place_label(expresion.falselbl)
+                wr.insert_stack(pos,0)
+                wr.place_label(temp)
+            else:
+                wr.insert_stack(pos,expresion.value)
+            # id, tipo, inHeap, strucType = ""
+
+        wr.comment("INSTRUCCION FOR")
+        inicio = f"L{wr.getLabel()}"
+        temp = f"T{wr.getPointer()}"
+        wr.place_operation(temp, expresion.value, "", "")
+        wr.place_label(inicio)
+
+        truelbl1 = f"L{wr.getLabel()}"
+        falselbl1 = f"L{wr.getLabel()}"
+        
+        wr.place_if(temp, rangeD.value, "<=", truelbl1)
+        wr.place_goto(falselbl1)
+
+        
+        tabla_simbolos.cicloInicio = inicio
+
+        tabla_simbolos.cicloFinal = falselbl1
+
+        wr.place_label(truelbl1)
+        for inst in self.instrucciones:
+                inst.interpretar(tabla_simbolos,wr)
+
+        wr.place_operation(temp, temp, 1, "+")
+        
+        existance:simbolo = tabla_simbolos.get(self.id)
+        if tabla_simbolos.entorno is not None:
+            apos = f"T{wr.getPointer()}"
+            wr.place_operation(apos, "P", existance.apuntador, "+")
+            wr.insert_stack(apos,temp)
+        else:
+            wr.insert_stack(pos,temp)
+
+
+        wr.place_goto(inicio)
+        wr.place_label(falselbl1)
+        tabla_simbolos.cicloInicio = ""
+        tabla_simbolos.cicloFinal = ""
 
 class instruccion_print(instruccion):
     def __init__(self, expresiones, tipo):
@@ -332,7 +290,6 @@ class instruccion_print(instruccion):
     def interpretar(self, tabla_simbolos, wr:write):
         for expresion in self.expresiones:
             v:valorExpresion = expresion.interpretar(tabla_simbolos,wr)
-            print(v)
             wr.comment("PRINT")
             if v.type == Tipo.String:
                 wr.insert_stack(0, v.value)
@@ -447,7 +404,23 @@ class definicion_funcion(instruccion):
 
         wr.addFunc(self.id, 1)
         for param in self.parametros:
-            tabla_simbolos.add(param[0], param[1],  (param[1] == "String" or param[1] == "Struct"))
+            tipo = Tipo.Int64
+            if param[1] == "Int64":
+                tipo = Tipo.Int64
+            elif param[1] == "Float64":
+                tipo = Tipo.Float64
+            elif param[1] == "String":
+                tipo = Tipo.String
+            elif param[1] == "Char":
+                tipo = Tipo.Char
+            elif param[1] == "Bool":
+                tipo = Tipo.Bool
+            elif param[1] == "Array":
+                tipo = Tipo.Array
+            elif param[1] == "Struct":
+                tipo = Tipo.Struct
+            
+            tabla_simbolos.add(param[0], tipo,  (param[1] == "String" or param[1] == "Struct"))
 
         for inst in self.instrucciones:
             inst.interpretar(tabla_simbolos,wr)
