@@ -174,17 +174,23 @@ class expresion_binaria(expresion):
         if self.operador in ["+", "-", "*", "/"]:
             expI = self.expI.interpretar(tabla_simbolos,wr)
             expD = self.expD.interpretar(tabla_simbolos,wr)
-            # interpretar si es exp 
-            if isinstance(expI,valorExpresion) is False:
-                expI = self.expI.interpretar(tabla_simbolos,wr)
-            # interpretar si es exp 
-            elif isinstance(expD,valorExpresion) is False:
-                expD = self.expD.interpretar(tabla_simbolos,wr)
+            
+            if self.operador == "+" and (expI.type == Tipo.String and expD.type == Tipo.String):
+                t1 = f"T{wr.getPointer()}"
+                temp1 = f"T{wr.getPointer()}"
+                temp2 = f"T{wr.getPointer()}"
+                size = tabla_simbolos.pos
+                wr.place_operation(temp1, "P", size + 1, "+")
+                wr.insert_stack(temp1, expI.value)
+                wr.place_operation(temp2, temp1, 1, "+")
+                wr.insert_stack(temp2, expD.value)
+                wr.new_env(size)
+                wr.addConcat()
+                wr.call_function("concatNative")
+                wr.get_stack(t1, "P")
 
-            '''AGREGAR STRINGS'''
-            if self.operador == "*":
-                if expI.type == Tipo.String and expD.type == Tipo.String:
-                    pass
+                wr.return_evn(size)
+                return valorExpresion(t1, Tipo.String, True)
 
             temp = f"T{wr.getPointer()}"
             wr.place_operation(temp, expI.value, expD.value, self.operador)
@@ -198,14 +204,24 @@ class expresion_binaria(expresion):
         elif self.operador == "^":
             expI = self.expI.interpretar(tabla_simbolos,wr)
             expD = self.expD.interpretar(tabla_simbolos,wr)
-            # interpretar si es exp 
-            if isinstance(expI,valorExpresion) is False:
-                expI = self.expI.interpretar(tabla_simbolos,wr)
-            # interpretar si es exp 
-            elif isinstance(expD,valorExpresion) is False:
-                expD = self.expD.interpretar(tabla_simbolos,wr)
+            
             if expI.type == Tipo.String and expD.type == Tipo.Int64:
-                pass
+                t1 = f"T{wr.getPointer()}"
+                temp1 = f"T{wr.getPointer()}"
+                temp2 = f"T{wr.getPointer()}"
+                size = tabla_simbolos.pos
+                wr.place_operation(temp1, "P", size + 1, "+")
+                wr.insert_stack(temp1, expI.value)
+                wr.place_operation(temp2, temp1,1, "+")
+                wr.insert_stack(temp2, expD.value)
+                wr.new_env(size)
+                wr.addRepeat()
+                wr.call_function("repeatNative")
+                wr.get_stack(t1, "P")
+
+                wr.return_evn(size)
+                return valorExpresion(t1, Tipo.String, True)
+
             elif expI.type == Tipo.Int64 and expD.type == Tipo.String:
                 pass
             else:
@@ -327,8 +343,8 @@ class expresion_nativa(expresion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self,  entorno = "Global"):
-        exp = self.expresion.interpretar(tabla_simbolos)
+    def interpretar(self, tabla_simbolos, wr:write):
+        exp = self.expresion.interpretar(tabla_simbolos, wr)
         
         if isinstance(exp,list):
             exp = valorExpresion(exp, Tipo.Array)
@@ -391,12 +407,35 @@ class expresion_nativa(expresion):
             if tipo != Tipo.String:
                 return error("valor no admitido para funcion %s: '%s'"%(self.funcion,tipo.value), "funcion nativa", self.linea)
             else:
-                return valorExpresion(valor.upper(),Tipo.String)
+                t1 = f"T{wr.getPointer()}"
+                temp1 = f"T{wr.getPointer()}"
+                size = tabla_simbolos.pos
+                wr.place_operation(temp1, "P", size + 1, "+")
+                wr.insert_stack(temp1, exp.value)
+                wr.new_env(size)
+                wr.addUpper()
+                wr.call_function("upperNative")
+                wr.get_stack(t1, "P")
+
+                wr.return_evn(size)
+                return valorExpresion(t1, Tipo.String, True)
         if(self.funcion == "lowercase"):
             if tipo != Tipo.String:
                 return error("valor no admitido para funcion %s: '%s'"%(self.funcion,tipo.value), "funcion nativa", self.linea)
             else:
-                return valorExpresion(valor.lower(),Tipo.String)
+                t1 = f"T{wr.getPointer()}"
+                temp1 = f"T{wr.getPointer()}"
+                size = tabla_simbolos.pos
+                wr.place_operation(temp1, "P", size + 1, "+")
+                wr.insert_stack(temp1, exp.value)
+                wr.new_env(size)
+                wr.addLower()
+                wr.call_function("lowerNative")
+                wr.get_stack(t1, "P")
+
+                wr.return_evn(size)
+                return valorExpresion(t1, Tipo.String, True)
+
 
 class expresion_nativa_log(expresion):
     def __init__(self, op,expresion1, expresion2, linea, columna):
@@ -462,12 +501,43 @@ class expresion_array(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self,  entorno = "Global"):
-        valores = []
-        for val in self.expresiones:
-            valor = val.interpretar(tabla_simbolos)
-            valores.append(valor)
-        return valores
+    def countDim(self, ar):
+        dim = 1
+        last = 0
+        for i in ar:
+            if isinstance(i, list):
+                count = self.countDim(i)
+                if count > last:
+                    last = count
+        return dim + last
+
+
+    def interpretar(self, tabla_simbolos, wr:write):
+        dim = 1
+        last = 0
+        
+        for i in self.expresiones:
+            if isinstance(i, list):
+                count = self.countDim(i)
+                if count > last:
+                    last = count
+        dim += last
+
+        t1 = f"T{wr.getPointer()}"
+        wr.place_operation(t1, "H")
+        wr.insert_heap(t1, dim)
+        wr.next_heap()
+        wr.insert_heap("H", 0)
+        wr.next_heap()
+        wr.insert_heap("H", len(self.expresiones) - 1)
+        wr.next_heap()
+        for i in self.expresiones:
+            valor = i.interpretar(tabla_simbolos, wr)
+            wr.insert_heap("H", valor.value)
+            wr.next_heap()
+        return valorExpresion(t1, Tipo.Array, True)
+
+
 
 class expresion_acceso_array(expresion):
     def __init__(self, id, posicion, linea, columna):

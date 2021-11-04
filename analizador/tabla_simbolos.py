@@ -66,7 +66,6 @@ class tabla_simbolos():
     variable_struct = {} # VARIABLES Y SU TIPO DE STRUCT
     funcs = {} # FUNCIONES
     funciones_print = []
-    pos = 1
     cicloInicio = ""
     cicloFinal = ""
     returnlbl = ""
@@ -99,11 +98,9 @@ class tabla_simbolos():
 
     def newEnv(self, nombre):
         self.entorno = nombre
-        self.ent_pos = 1
 
     def returnEnv(self):
         self.entorno = None
-        self.ent_pos = 1
 
     def add(self, id, tipo, inHeap, strucType = ""):
         simb = simbolo(id,tipo, self.pos, (self.entorno == None), inHeap, strucType)

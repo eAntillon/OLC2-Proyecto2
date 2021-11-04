@@ -233,12 +233,15 @@ def p_asignacion_array(t):
     '''asignacion_array :   ID IGUAL expresion_array'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)  
+    t[0] = asignacion_array(t[1], t[3], line, col)
 
 def p_asignacion_posicion_array(t):
     '''asignacion_posicion_array  :   ID lista_acceso_posicion IGUAL expresion'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
-    
+    t[0] = asignacion_array_posicion(t[1], t[2], t[4], line, col)
+
+
 def p_asignacion_posicion_array_igual_array(t):
     '''asignacion_posicion_array  :   ID lista_acceso_posicion IGUAL expresion_array'''
     line = t.lexer.lineno
@@ -248,7 +251,8 @@ def p_expresion_array(t):
     '''expresion_array  :   CORIZQ lista_expresiones CORDER
                         |   CORIZQ empty CORDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)  
+    col = get_column(t[1], lexer.lexdata, line) 
+    t[0] = expresion_array(t[2], line, col)
 
 def p_instruccion_push(t):
     '''instruccion_push :   PUSH NOT PARIZQ ID COMA expresion PARDER
@@ -274,9 +278,10 @@ def p_expresion_acceso_array(t):
 
 def p_lista_acceso_array(t):
     '''lista_acceso_posicion    :   CORIZQ expresion CORDER lista_acceso_posicion'''
-
+    t[0] = [t[2]] + t[4]
 def p_lista_acceso_array1(t):
     '''lista_acceso_posicion    :   CORIZQ expresion CORDER'''
+    t[0] = [t[2]]
 
 def p_lista_expresiones(t):
     '''lista_expresiones    :   expresion COMA lista_expresiones'''
@@ -403,6 +408,7 @@ def p_expresion_nativa(t):
                         |   UPPERCASE PARIZQ expresion PARDER'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = expresion_nativa(t[1], t[3], line, col)
     
 def p_expresion_nativa_parametros(t):
     '''expresion_nativa :   LOG PARIZQ expresion COMA expresion PARDER

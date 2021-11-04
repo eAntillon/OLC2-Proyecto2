@@ -38,7 +38,7 @@ class asignacion(instruccion):
         else:
             tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
             expresion1 = tabla_simbolos.get(self.id)
-            pos = tabla_simbolos.getPos()
+            pos = tabla_simbolos.getPos() - 1
             temp = f"L{wr.getLabel()}"
             if tabla_simbolos.entorno is not None:
                 pos = f"T{wr.getPointer()}"
@@ -54,26 +54,47 @@ class asignacion(instruccion):
                 wr.place_label(temp)
             else:
                 wr.insert_stack(pos,expresion.value)
-            # id, tipo, inHeap, strucType = ""
 
 class asignacion_array(instruccion):
     def __init__(self, id: str, expresiones, linea: int, columna: int):
         self.id = id
-        self.expresiones = expresiones
+        self.expresion = expresiones
         self.line = linea
         self.col = columna
 
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        existance = tabla_simbolos.get(self.id)
-        valor = self.expresiones.interpretar(tabla_simbolos)
+    def interpretar(self, tabla_simbolos, wr:write):
+        # ASIGNAR EXPRESION
+        expresion = self.expresion.interpretar(tabla_simbolos,wr)
+        existance:simbolo = tabla_simbolos.get(self.id)
 
-        s = simbolo(self.id, valor, Tipo.Array, entorno, self.line, self.col)
-        if existance is None:
-            # Agregar nuevo simbolo
-            tabla_simbolos.add(s)
+        if existance is not None:
+            if tabla_simbolos.entorno is not None:
+                pos = f"T{wr.getPointer()}"
+                wr.place_operation(pos, "P", existance.apuntador, "+")
+                wr.insert_stack(pos,expresion.value)
+            else:
+                wr.insert_stack(existance.apuntador,expresion.value)
         else:
-            # Actualizar valor
-            tabla_simbolos.update(s)
+            tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
+            expresion1 = tabla_simbolos.get(self.id)
+            pos = tabla_simbolos.getPos() - 1
+            temp = f"L{wr.getLabel()}"
+            if tabla_simbolos.entorno is not None:
+                pos = f"T{wr.getPointer()}"
+                wr.place_operation(pos, "P", expresion1.apuntador, "+")
+
+            if expresion.type == Tipo.Bool:
+                
+                wr.place_label(expresion.truelbl)
+                wr.insert_stack(pos,1)
+                wr.place_goto(temp)
+                wr.place_label(expresion.falselbl)
+                wr.insert_stack(pos,0)
+                wr.place_label(temp)
+            else:
+                wr.insert_stack(pos,expresion.value)
+        
+
         
 class asignacion_array_posicion(instruccion):
     def __init__(self, id: str, posiciones, expresion, linea: int, columna: int):
@@ -183,11 +204,10 @@ class instruccion_while(instruccion):
         inicio = f"L{wr.getLabel()}"
         wr.place_label(inicio)
 
-        valor = self.expresion.interpretar(tabla_simbolos,wr)
 
         tabla_simbolos = ts(tabla_simbolos)
         tabla_simbolos.cicloInicio = inicio
-
+        valor = self.expresion.interpretar(tabla_simbolos,wr)
         tabla_simbolos.cicloFinal = valor.falselbl
 
         if(valor.type != Tipo.Bool):

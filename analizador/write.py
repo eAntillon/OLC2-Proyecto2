@@ -64,10 +64,10 @@ class write():
     def insert_code(self, codigo, tab='\t'):
         # escribir en nativas
         if self.in_native:
-            if self.natives == '':
+            if self.nativas == '':
                 # comentario
-                self.natives += '/* funciones nativas */\n'
-            self.natives = self.natives + tab + codigo
+                self.nativas += '/* funciones nativas */\n'
+            self.nativas = self.nativas + tab + codigo
         # escribir en funciones
         elif self.in_function:
             if self.funciones == '':
@@ -116,8 +116,6 @@ class write():
         self.insert_code(f'P=P+{tamano};\n')
 
     def addFunc(self, id, tipoFunc):
-        if(not self.in_native):
-            self.in_function = True
         if tipoFunc == 1:
             self.in_function = True
         else:
@@ -210,3 +208,224 @@ class write():
     {l[0]}:
     return;
 """ + "}"
+
+    def addConcat(self):
+        if "concatNative" in self.nativasAgregadas:
+            return
+        self.nativasAgregadas.append("concatNative")
+        self.in_native = True
+        self.addFunc("concatNative", 0)
+        t3 = f"T{self.getPointer()}" # resultado
+        self.place_operation(t3, "H")
+
+        self.comment("PARAMETRO 1")
+        t1 = f"T{self.getPointer()}"    # pos 1
+        self.place_operation(t1, "P", 1, "+")
+        t1s = f"T{self.getPointer()}"    
+        self.get_stack(t1s, t1)
+        
+        l1 = f"L{self.getLabel()}"
+        lf1 = f"L{self.getLabel()}"
+
+        tempPos = f"T{self.getPointer()}"
+        tempCad = f"T{self.getPointer()}"
+        self.place_operation(tempPos, t1s)
+
+        self.place_label(l1) # LABEL 1
+        self.get_heap(tempCad, tempPos)
+        self.place_if(tempCad, "-1", "==", lf1)
+        self.insert_heap("H", tempCad)
+        self.place_operation(tempPos, tempPos, "1", "+")
+        self.next_heap()
+        self.place_goto(l1)
+        
+        self.place_label(lf1) # LABEL 2
+        l2 = f"L{self.getLabel()}"
+        lf2 = f"L{self.getLabel()}"
+
+        self.comment("PARAMETRO 2")
+        t2 = f"T{self.getPointer()}"    # pos 2
+        self.place_operation(t2, "P", 2, "+")
+        t2s = f"T{self.getPointer()}"    
+        self.get_stack(t2s, t2)
+        
+        tempPos = f"T{self.getPointer()}"
+        tempCad = f"T{self.getPointer()}"
+        self.place_operation(tempPos, t2s)
+
+        self.place_label(l2) # LABEL 2
+        self.get_heap(tempCad, tempPos)
+        self.place_if(tempCad, "-1", "==", lf2)
+        self.insert_heap("H", tempCad)
+        self.place_operation(tempPos, tempPos, "1", "+")
+        self.next_heap()
+        self.place_goto(l2)
+
+        self.place_label(lf2) # SALIDA
+        self.insert_heap("H", -1)
+        self.next_heap()
+        self.insert_stack("P", t3)
+        self.endFunc()
+
+    def addRepeat(self):
+        if "repeatNative" in self.nativasAgregadas:
+            return
+        self.nativasAgregadas.append("repeatNative")
+        self.in_native = True
+        self.addFunc("repeatNative", 0)
+
+        t3 = f"T{self.getPointer()}" # resultado
+        self.place_operation(t3, "H")
+
+        self.comment("PARAMETRO 1")
+        t1 = f"T{self.getPointer()}"    # pos 1
+        self.place_operation(t1, "P", 1, "+")
+        t1s = f"T{self.getPointer()}"    
+        self.get_stack(t1s, t1)
+
+        self.comment("PARAMETRO 2")
+        t2 = f"T{self.getPointer()}"    # pos 2
+        self.place_operation(t2, "P", 2, "+")
+        t2s = f"T{self.getPointer()}"    
+        self.get_stack(t2s, t2)
+        
+        
+        l1 = f"L{self.getLabel()}"
+        lf1 = f"L{self.getLabel()}"
+
+        tempPos = f"T{self.getPointer()}"
+        tempCad = f"T{self.getPointer()}"
+        tempCount = f"T{self.getPointer()}"
+        self.place_operation(tempPos, t1s)
+        self.place_operation(tempCount, t2s)
+
+        self.place_label(l1) # LABEL 1
+        self.get_heap(tempCad, tempPos)
+        self.place_if(tempCad, "-1", "==", lf1)
+        self.insert_heap("H", tempCad)
+        self.place_operation(tempPos, tempPos, "1", "+")
+        self.next_heap()
+        self.place_goto(l1)
+        
+        lf2 = f"L{self.getLabel()}"
+        self.place_label(lf1) # LABEL 2
+        self.place_operation(tempCount, tempCount, "1", "-")
+        self.place_operation(tempPos, t1s)
+        self.place_if(tempCount, "1", "<", lf2)
+        self.place_goto(l1)
+
+        self.place_label(lf2) # SALIDA
+        self.insert_heap("H", -1)
+        self.next_heap()
+        self.insert_stack("P", t3)
+        self.endFunc()
+
+    def addLower(self):
+        if "lowerNative" in self.nativasAgregadas:
+            return
+        self.nativasAgregadas.append("lowerNative")
+        self.in_native = True
+        self.addFunc("lowerNative", 0)
+
+        t3 = f"T{self.getPointer()}" # resultado
+        self.place_operation(t3, "H")
+
+        self.comment("PARAMETRO 1")
+        t1 = f"T{self.getPointer()}"    # pos 1
+        self.place_operation(t1, "P", 1, "+")
+        t1s = f"T{self.getPointer()}"    
+        self.get_stack(t1s, t1)
+
+        l1 = f"L{self.getLabel()}"
+        l2 = f"L{self.getLabel()}"
+        l3 = f"L{self.getLabel()}"
+        lf = f"L{self.getLabel()}"
+        lf1 = f"L{self.getLabel()}"
+
+        tempPos = f"T{self.getPointer()}"
+        tempCad = f"T{self.getPointer()}"
+        self.place_operation(tempPos, t1s)
+
+        self.place_label(l1) # LABEL 1
+        self.get_heap(tempCad, tempPos)
+        self.place_if(tempCad, "-1", "==", lf1)
+        self.place_if(tempCad, 65, ">=", l2)
+        self.place_goto(lf)
+        self.place_label(l2)
+        self.place_if(tempCad, 90, "<=", l3)
+        self.place_goto(lf)
+
+        self.place_label(l3)
+        temp = f"T{self.getPointer()}"
+        self.place_operation(temp, tempCad, 32, "+")
+        self.insert_heap("H", temp)
+        self.place_operation(tempPos, tempPos, "1", "+")
+        self.next_heap()
+        self.place_goto(l1)
+
+        self.place_label(lf)
+        self.insert_heap("H", tempCad)
+        self.place_operation(tempPos, tempPos, "1", "+")
+        self.next_heap()
+        self.place_goto(l1)
+
+        self.place_label(lf1) # SALIDA
+        self.insert_heap("H", -1)
+        self.next_heap()
+        self.insert_stack("P", t3)
+        self.endFunc()
+
+    def addUpper(self):
+        if "upperNative" in self.nativasAgregadas:
+            return
+        self.nativasAgregadas.append("upperNative")
+        self.in_native = True
+        self.addFunc("upperNative", 0)
+
+        t3 = f"T{self.getPointer()}" # resultado
+        self.place_operation(t3, "H")
+
+        self.comment("PARAMETRO 1")
+        t1 = f"T{self.getPointer()}"    # pos 1
+        self.place_operation(t1, "P", 1, "+")
+        t1s = f"T{self.getPointer()}"    
+        self.get_stack(t1s, t1)
+
+        l1 = f"L{self.getLabel()}"
+        l2 = f"L{self.getLabel()}"
+        l3 = f"L{self.getLabel()}"
+        lf = f"L{self.getLabel()}"
+        lf1 = f"L{self.getLabel()}"
+
+        tempPos = f"T{self.getPointer()}"
+        tempCad = f"T{self.getPointer()}"
+        self.place_operation(tempPos, t1s)
+
+        self.place_label(l1) # LABEL 1
+        self.get_heap(tempCad, tempPos)
+        self.place_if(tempCad, "-1", "==", lf1)
+        self.place_if(tempCad, 97, ">=", l2)
+        self.place_goto(lf)
+        self.place_label(l2)
+        self.place_if(tempCad, 122, "<=", l3)
+        self.place_goto(lf)
+
+        self.place_label(l3)
+        temp = f"T{self.getPointer()}"
+        self.place_operation(temp, tempCad, 32, "-")
+        self.insert_heap("H", temp)
+        self.place_operation(tempPos, tempPos, "1", "+")
+        self.next_heap()
+        self.place_goto(l1)
+
+        self.place_label(lf)
+        self.insert_heap("H", tempCad)
+        self.place_operation(tempPos, tempPos, "1", "+")
+        self.next_heap()
+        self.place_goto(l1)
+
+        self.place_label(lf1) # SALIDA
+        self.insert_heap("H", -1)
+        self.next_heap()
+        self.insert_stack("P", t3)
+        self.endFunc()
