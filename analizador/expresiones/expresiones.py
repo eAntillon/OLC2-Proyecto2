@@ -25,6 +25,7 @@ class valorExpresion(expresion):
         self.isTemp = isTemp
         self.truelbl = true
         self.falselbl = false
+        self.subtype = ""
 
     def toString(self):
         if(self.type == Tipo.Array):
@@ -133,12 +134,12 @@ class expresion_id(expresion):
         self.columna = columna
 
     def interpretar(self, tabla_simbolos, wr:write):
-        valor = tabla_simbolos.get(self.valor)
+        valor:simbolo = tabla_simbolos.get(self.valor)
         wr.comment("ACCESO ID")
         if (valor is not None):
             tempValue = f"T{wr.getPointer()}"
             tempos = valor.apuntador
-            if tabla_simbolos.entorno is not None:
+            if valor.isGlobal is False:
                 tempos = f"T{wr.getPointer()}"
                 wr.place_operation(tempos, "P", valor.apuntador, "+")
             wr.get_stack(tempValue,tempos)
@@ -171,11 +172,15 @@ class expresion_binaria(expresion):
     def interpretar(self, tabla_simbolos, wr:write):
         
         # operacion normal binaria
-        if self.operador in ["+", "-", "*", "/"]:
+        if self.operador in ["+", "-", "*", "/", "%"]:
             expI = self.expI.interpretar(tabla_simbolos,wr)
             expD = self.expD.interpretar(tabla_simbolos,wr)
-            
-            if self.operador == "+" and (expI.type == Tipo.String and expD.type == Tipo.String):
+            if self.operador == "%":
+                temp = f"T{wr.getPointer()}"
+                wr.place_mod_op(temp, expI.value, expD.value)
+                return valorExpresion(temp, Tipo.Float64, True)
+
+            if self.operador == "*" and (expI.type == Tipo.String and expD.type == Tipo.String):
                 t1 = f"T{wr.getPointer()}"
                 temp1 = f"T{wr.getPointer()}"
                 temp2 = f"T{wr.getPointer()}"
@@ -226,14 +231,15 @@ class expresion_binaria(expresion):
                 pass
             else:
                 temp = f"T{wr.getPointer()}"
-                wr.place_operation(temp, "P", 2, "+")
+                size = tabla_simbolos.pos
+                wr.place_operation(temp, "P", size + 1, "+")
                 wr.insert_stack(temp, expI.value)
                 wr.place_operation(temp, temp, 1, "+")
                 wr.insert_stack(temp, expD.value)
-                wr.new_env(1)
+                wr.new_env(size)
                 wr.call_function("potenNativeFunc")
                 wr.get_stack(temp, "P")
-                wr.return_evn(1)
+                wr.return_evn(size)
                 wr.addPotencia()
                 return valorExpresion(temp, Tipo.Float64, True)
 
@@ -258,8 +264,24 @@ class expresion_binaria(expresion):
                         self.falselbl = f"L{wr.getLabel()}"
                     wr.place_if(expI.value, expD.value, self.operador, self.truelbl)
                     wr.place_goto(self.falselbl)
-                elif expD.type == Tipo.String and expD.type == Tipo.String:
-                    print("Comparacion de cadenas")
+                elif self.operador == "==" and (expD.type == Tipo.String and expD.type == Tipo.String):
+                    temp = f"T{wr.getPointer()}"
+                    wr.place_operation(temp, "P", 2, "+")
+                    wr.insert_stack(temp, expI.value)
+                    wr.place_operation(temp, temp, 1, "+")
+                    wr.insert_stack(temp, expD.value)
+                    wr.new_env(1)
+                    wr.call_function("compareString")
+                    wr.get_stack(temp, "P")
+                    wr.return_evn(1)
+                    wr.addCompareString()
+                    if self.truelbl == '':
+                        self.truelbl = f"L{wr.getLabel()}"
+                    if self.falselbl == '':
+                        self.falselbl = f"L{wr.getLabel()}"
+                    wr.place_if(temp, 1, self.operador, self.truelbl)
+                    wr.place_goto(self.falselbl)
+                    return valorExpresion(temp, Tipo.Bool, True, self.truelbl, self.falselbl)
             else:
                 gotoDer = f"L{wr.getLabel()}"
                 izqTemp = f"T{wr.getPointer()}"
@@ -335,7 +357,6 @@ class expresion_binaria(expresion):
             r.falselbl = self.falselbl
             return r
             
-
 class expresion_nativa(expresion):
     def __init__(self, funcion, expresion, linea, columna):
         self.funcion = funcion
@@ -400,9 +421,40 @@ class expresion_nativa(expresion):
                 #ERROR TIPOS
                 error("valor no admitido para funcion %s: '%s'"%(self.funcion,tipo.value), "funcion nativa", self.linea)
         if(self.funcion == "length"):
-            return valorExpresion(len(exp.value), Tipo.Int64)
+            
+            temp = f"T{wr.getPointer()}"
+            temp1 = f"T{wr.getPointer()}"
+            lblerr = f"L{wr.getLabel()}"
+            salida = f"L{wr.getLabel()}"
+            
+            wr.place_operation(temp, valor)
+            wr.get_heap(temp1, temp)
+            wr.place_if(temp1, "-2", "!=", lblerr)
+            wr.place_operation(temp, temp, 1, "+")
+            wr.get_heap(temp1, temp)
+            wr.place_goto(salida)
+            wr.place_label(lblerr)
+            wr.insert_code(f"fmt.Printf(\"Error, no es de tipo array\");\n")
+
+            wr.place_label(salida)
+
+            return valorExpresion(temp1, Tipo.Int64, True)
         if(self.funcion == "trunc"):
-            return valorExpresion(float(int(valor)), Tipo.Float64)
+            if tipo != Tipo.Float64 and tipo != Tipo.Int64:
+                return error("valor no admitido para funcion %s: '%s'"%(self.funcion,tipo.value), "funcion nativa", self.linea)
+            else:
+                t1 = f"T{wr.getPointer()}"
+                temp1 = f"T{wr.getPointer()}"
+                size = tabla_simbolos.pos
+                wr.place_operation(temp1, "P", size + 1, "+")
+                wr.insert_stack(temp1, exp.value)
+                wr.new_env(size)
+                wr.addTrunc()
+                wr.call_function("truncNative")
+                wr.get_stack(t1, "P")
+
+                wr.return_evn(size)
+                return valorExpresion(t1, Tipo.Int64, True)
         if(self.funcion == "uppercase"):
             if tipo != Tipo.String:
                 return error("valor no admitido para funcion %s: '%s'"%(self.funcion,tipo.value), "funcion nativa", self.linea)
@@ -435,7 +487,6 @@ class expresion_nativa(expresion):
 
                 wr.return_evn(size)
                 return valorExpresion(t1, Tipo.String, True)
-
 
 class expresion_nativa_log(expresion):
     def __init__(self, op,expresion1, expresion2, linea, columna):
@@ -501,87 +552,122 @@ class expresion_array(expresion):
         self.linea = linea
         self.columna = columna
 
-    def countDim(self, ar):
-        dim = 1
-        last = 0
-        for i in ar:
-            if isinstance(i, list):
-                count = self.countDim(i)
-                if count > last:
-                    last = count
-        return dim + last
-
-
     def interpretar(self, tabla_simbolos, wr:write):
-        dim = 1
-        last = 0
-        
-        for i in self.expresiones:
-            if isinstance(i, list):
-                count = self.countDim(i)
-                if count > last:
-                    last = count
-        dim += last
 
-        t1 = f"T{wr.getPointer()}"
+
+        t1 = f"T{wr.getPointer()}" 
         wr.place_operation(t1, "H")
-        wr.insert_heap(t1, dim)
+        wr.insert_heap("H", "-2")
         wr.next_heap()
-        wr.insert_heap("H", 0)
+        wr.insert_heap("H", len(self.expresiones))
         wr.next_heap()
-        wr.insert_heap("H", len(self.expresiones) - 1)
+        type = f"T{wr.getPointer()}"
+        wr.place_operation(type, "H")
+        wr.insert_heap("H", 1)
         wr.next_heap()
-        for i in self.expresiones:
-            valor = i.interpretar(tabla_simbolos, wr)
-            wr.insert_heap("H", valor.value)
+        temporales = []
+        for i in range(len(self.expresiones)):
+            temp = f"T{wr.getPointer()}"
+            wr.place_operation(temp, "H")
             wr.next_heap()
+            temporales.append(temp)
+        count = 0
+        wr.comment("VALORES")
+        subtype = Tipo.Int64
+        for val in self.expresiones:
+            valor = val.interpretar(tabla_simbolos,wr)
+            temp = f"T{wr.getPointer()}"
+            wr.place_operation(temp, "H")
+            if valor.type == Tipo.Array:
+                wr.insert_heap(temporales[count], valor.value)
+            else:
+                subtype = valor.type
+                wr.insert_heap(temp, valor.value)
+                wr.next_heap()
+                wr.insert_heap(temporales[count], temp)
+            count += 1
+        wr.comment("INSERTAR TIPO")
+        if subtype == Tipo.String:
+            wr.insert_heap(type, 0)
+        elif subtype == Tipo.Int64:
+            wr.insert_heap(type, 1)
+        elif subtype == Tipo.Float64:
+            wr.insert_heap(type, 2)
+
         return valorExpresion(t1, Tipo.Array, True)
-
-
 
 class expresion_acceso_array(expresion):
     def __init__(self, id, posicion, linea, columna):
         self.id = id
-        self.posicion = posicion
+        self.posiciones = posicion
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self,  entorno = "Global"):
-        simbolo = tabla_simbolos.get(self.id)
-        array = simbolo.valor
-        if(array is None):
-            error("variable %s no definida"%(self.valor), "expresion array posicion", self.linea)
-        if(isinstance(array, list) is not True):
-            error("variable '%s' no es de tipo array, no puede ser accesada por posicion"%(self.id), "acceso array", self.linea)
-        
-        posiciones = []
-        for pos in self.posicion:
-            posicion = pos.interpretar(tabla_simbolos)
-            if(posicion.type != Tipo.Int64):
-                error("se esperaba una posicion de tipo 'Int64' se obutvo '%s'"%(posicion.type.value), "acceso array", self.linea)
-                break
-            posiciones.append(posicion.value)
-        
-        nivel = array
-        contador = 1
-        for pos in posiciones:
+    def interpretar(self,  tabla_simbolos, wr:write):
+        existance:simbolo = tabla_simbolos.get(self.id)
 
-            if(pos == posiciones[-1] and contador == len(posiciones)):
-                if(len(nivel) < pos):
-                    error("posicion '%s' fuera de los limites del array"%(pos), "acceso array", self.linea)
-                if(isinstance(nivel, list)):
-                    return nivel[pos-1]
-                else:
-                    #ERROR
-                    return valorExpresion(nivel.value, nivel.type)
-            else:
-                if(len(nivel) < pos):
-                    error("posicion '%s' fuera de los limites del array"%(pos), "acceso array", self.linea)
-                if(isinstance(nivel, list) is not True):
-                    error("el valor accesado '%s' no es de tipo array, valor '%s'"%(self.id. pos), "acceso array", self.linea)
-                else:
-                    nivel = nivel[pos-1]
-            contador+= 1
+        if existance is not None:
+            wr.comment("ACCESO ARRAY")
+            posiciones = []
+            for pos in self.posiciones:
+                valor = pos.interpretar(tabla_simbolos,wr)
+                posiciones.append(valor)
+            
+            apuntador = existance.apuntador
+            posicion = f"T{wr.getPointer()}"
+            wr.get_stack(posicion, apuntador)
+            valor = f"T{wr.getPointer()}"
+            wr.place_operation(valor, 0)
+            
+            t0 = f"T{wr.getPointer()}" # POSICION A ACCEDER
+            
+            t1 = f"T{wr.getPointer()}" # VALOR ACCEDIDO
+            tamano = f"T{wr.getPointer()}"
+
+            for pos in posiciones:
+                wr.comment(f"ACCESO POS {pos.value} ")
+                wr.place_operation(t0, posicion)
+                lblfinal = f"L{wr.getLabel()}"
+                lblerr1 = f"L{wr.getLabel()}"
+                lblerr2 = f"L{wr.getLabel()}"
+                temp = f"T{wr.getPointer()}"
+                wr.place_operation(temp,pos.value)
+
+                wr.get_heap(t1, t0)
+                wr.place_if(t1, "-2", "!=", lblerr1)
+                wr.place_operation(t0,t0,"1","+")
+                wr.get_heap(t1, t0)
+                wr.place_operation(tamano,t1)
+                wr.place_operation(t0,t0,"1","+")
+
+                wr.place_if(temp, tamano, ">", lblerr2)
+                wr.place_operation(t0, t0, temp, "+")
+                wr.get_heap(t1, t0)
+                wr.get_heap(valor, t1)
+
+                lblcontinue = f"L{wr.getLabel()}"
+                wr.place_if(valor, "-2", "==", lblcontinue)
+                wr.place_goto(lblfinal)
+
+                wr.place_label(lblcontinue)
+                wr.place_operation(posicion, t1) # CAMBIO DE ARRAY 
+                wr.place_goto(lblfinal)
+
+                wr.place_label(lblerr1)
+                wr.insert_code("fmt.Printf(\"No es un array\");\n")
+                wr.place_goto(lblfinal)
+
+                wr.place_label(lblerr2)
+                wr.insert_code("fmt.Printf(\"Posicion fuera de los limites del array\");\n")
+                
+                wr.place_label(lblfinal)
+            lblreturn = f"L{wr.getLabel()}"
+            wr.place_if(valor, "-2", "!=", lblreturn)
+            wr.place_operation(valor, t1)
+            wr.place_label(lblreturn)
+            return valorExpresion(valor, Tipo.Int64, True)
+        else:
+            print("ERROR")
 
 class expression_array_range(expresion):
     def __init__(self, id, range, linea, columna):

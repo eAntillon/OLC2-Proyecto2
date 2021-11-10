@@ -10,6 +10,7 @@ class Tipo(Enum):
     Nothing = "Nothing"
     Array = "Array"
     Struct = "Struct"
+    ArrayArray = "ArrayArray"
 
 @dataclass
 class simbolo():

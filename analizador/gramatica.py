@@ -9,7 +9,7 @@ reservadas = [
     'TRUE', 'FALSE', 'PARSE', 'TRUNC', 'FLOAT','STRINGF','TYPEOF', 
     'IF', 'ELSE', 'WHILE', 'FOR', 'BREAK', 'RETURN', 'CONTINUE', 'END', 'IN',
     'STRUCT', 'MUTABLE', 'FUNCTION', 'LENGTH', 'POP', 'PUSH', 'LIST',
-    'ELSEIF', 'LOWERCASE', 'UPPERCASE', 'GLOBAL'
+    'ELSEIF', 'LOWERCASE', 'UPPERCASE', 'GLOBAL', 'VECTOR'
 ]
 
 esc = ['nothing','Int64','Float64','Bool','Char','String',
@@ -17,7 +17,7 @@ esc = ['nothing','Int64','Float64','Bool','Char','String',
     'true', 'false', 'parse', 'trunc', 'float','string','typeof', 
     'if', 'else', 'while', 'for', 'break', 'return', 'continue', 'end', 'in',
     'struct', 'mutable', 'function', 'length', 'pop', 'push', 'List', 'elseif',
-    'lowercase', 'uppercase', 'global']
+    'lowercase', 'uppercase', 'global', 'Vector']
 
 tokens  = reservadas + [
     'COMENTL', 'COMENTML',
@@ -26,7 +26,7 @@ tokens  = reservadas + [
     'AND', 'OR', 'NOT',
     'DECIMAL','ENTERO','CADENA','CHAR_CADENA',
     'PTCOMA', 'COMA', 'PT','DOSPT','PARIZQ','PARDER','CORIZQ','CORDER',
-    'ID'
+    'ID', 'LLIZQ', 'LLDER'
 ]
 
 t_NOTHING   = r'nothing'
@@ -40,8 +40,11 @@ t_FLOAT    = r'float'
 t_STRINGF    = r'string'
 t_TYPEOF    = r'typeof'
 t_STRING    = r'String'
+t_VECTOR    = r'Vector'
 t_PARIZQ    = r'\('
 t_PARDER    = r'\)'
+t_LLIZQ    = r'{'
+t_LLDER    = r'}'
 t_CORIZQ    = r'\['
 t_CORDER    = r'\]'
 t_MAS       = r'\+'
@@ -230,10 +233,10 @@ def p_asignacion_global(t):
 #ARRAYS
 
 def p_asignacion_array(t):
-    '''asignacion_array :   ID IGUAL expresion_array'''
+    '''asignacion_array :   ID IGUAL expresion_array definicion_tipo_vector'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)  
-    t[0] = asignacion_array(t[1], t[3], line, col)
+    col = get_column(t[1], lexer.lexdata, line)
+    t[0] = asignacion_array(t[1], t[3], t[4], line, col)
 
 def p_asignacion_posicion_array(t):
     '''asignacion_posicion_array  :   ID lista_acceso_posicion IGUAL expresion'''
@@ -246,9 +249,10 @@ def p_asignacion_posicion_array_igual_array(t):
     '''asignacion_posicion_array  :   ID lista_acceso_posicion IGUAL expresion_array'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)  
+    t[0] = asignacion_array_posicion(t[1], t[2], t[4], line, col)
 
 def p_expresion_array(t):
-    '''expresion_array  :   CORIZQ lista_expresiones CORDER
+    '''expresion_array  :   CORIZQ lista_expresiones CORDER 
                         |   CORIZQ empty CORDER'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line) 
@@ -275,6 +279,7 @@ def p_expresion_acceso_array(t):
     '''expresion_acceso_array   :   ID lista_acceso_posicion'''
     line = t.lexer.lineno
     col = get_column(t[1], lexer.lexdata, line)
+    t[0] = expresion_acceso_array(t[1], t[2], line, col)
 
 def p_lista_acceso_array(t):
     '''lista_acceso_posicion    :   CORIZQ expresion CORDER lista_acceso_posicion'''
@@ -341,12 +346,26 @@ def p_tipo_expresion(t):
     t[0] = t[1]    
 
 def p_definicion_tipo(t):
-    '''definicion_tipo  :   DOSPT DOSPT tipo
+    '''definicion_tipo  :   DOSPT DOSPT tipo 
                         |   empty'''
     if t[1] is not None:
         t[0] = t[3]
     else:
         t[0] = None
+
+def p_definicion_tipo_vector(t):
+    '''definicion_tipo_vector   :   DOSPT DOSPT tipo_vector 
+                                |   empty'''
+    if t[1] is not None:
+        t[0] = t[3]
+    else:
+        t[0] = None
+
+def p_tipo_vector(t):
+    '''tipo_vector  : VECTOR LLIZQ tipo LLDER
+                    | VECTOR LLIZQ tipo_vector LLDER'''
+    t[0] = t[1] + t[2] + t[3] + t[4]
+    
 
 def p_definicion_tipo_struct(t):
     '''definicion_tipo  :   DOSPT DOSPT ID'''

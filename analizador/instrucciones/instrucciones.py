@@ -35,6 +35,7 @@ class asignacion(instruccion):
                 wr.insert_stack(pos,expresion.value)
             else:
                 wr.insert_stack(existance.apuntador,expresion.value)
+            tabla_simbolos.update(self.id, expresion.type)
         else:
             tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
             expresion1 = tabla_simbolos.get(self.id)
@@ -45,7 +46,6 @@ class asignacion(instruccion):
                 wr.place_operation(pos, "P", expresion1.apuntador, "+")
 
             if expresion.type == Tipo.Bool:
-                
                 wr.place_label(expresion.truelbl)
                 wr.insert_stack(pos,1)
                 wr.place_goto(temp)
@@ -56,9 +56,10 @@ class asignacion(instruccion):
                 wr.insert_stack(pos,expresion.value)
 
 class asignacion_array(instruccion):
-    def __init__(self, id: str, expresiones, linea: int, columna: int):
+    def __init__(self, id: str, expresiones, tipo, linea: int, columna: int):
         self.id = id
         self.expresion = expresiones
+        self.tipo = tipo
         self.line = linea
         self.col = columna
 
@@ -75,6 +76,9 @@ class asignacion_array(instruccion):
             else:
                 wr.insert_stack(existance.apuntador,expresion.value)
         else:
+            if self.tipo is not None:
+                cadena = self.tipo.split("{")
+                print("HOLA AQUI CADENA", cadena)
             tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
             expresion1 = tabla_simbolos.get(self.id)
             pos = tabla_simbolos.getPos() - 1
@@ -93,9 +97,7 @@ class asignacion_array(instruccion):
                 wr.place_label(temp)
             else:
                 wr.insert_stack(pos,expresion.value)
-        
-
-        
+                
 class asignacion_array_posicion(instruccion):
     def __init__(self, id: str, posiciones, expresion, linea: int, columna: int):
         self.id = id
@@ -104,52 +106,77 @@ class asignacion_array_posicion(instruccion):
         self.line = linea
         self.col = columna
 
-    def modificar_array(self, ar, indexes, valor):
-        mod = ar
-        if(len(indexes) == 1):
-            mod[indexes[0]] = valor
-            return mod
+    def interpretar(self, tabla_simbolos,wr:write):
+        
+        expresion = self.expresion.interpretar(tabla_simbolos,wr)
+        existance:simbolo = tabla_simbolos.get(self.id)
+
+        if existance is not None:
+            wr.comment("ACCESO ARRAY")
+            posiciones = []
+            for pos in self.posiciones:
+                valor = pos.interpretar(tabla_simbolos,wr)
+                posiciones.append(valor)
+            
+            apuntador = existance.apuntador
+            posicion = f"T{wr.getPointer()}"
+            wr.get_stack(posicion, apuntador)
+            valor = f"T{wr.getPointer()}"
+            wr.place_operation(valor, 0)
+            
+            t0 = f"T{wr.getPointer()}" # POSICION A ACCEDER
+            
+            t1 = f"T{wr.getPointer()}" # VALOR ACCEDIDO
+            tamano = f"T{wr.getPointer()}"
+
+            lblerr1 = f"L{wr.getLabel()}"
+            lblerr2 = f"L{wr.getLabel()}"
+            lblerrfinal = f"L{wr.getLabel()}"
+            lblfinal = f"L{wr.getLabel()}"
+            
+            for pos in posiciones:
+                wr.comment(f"ACCESO POS {pos.value} ")
+                wr.place_operation(t0, posicion)
+                
+                temp = f"T{wr.getPointer()}"
+                wr.place_operation(temp,pos.value)
+
+                wr.get_heap(t1, t0)
+                wr.place_if(t1, "-2", "!=", lblerr1)
+                wr.place_operation(t0,t0,"1","+")
+                wr.get_heap(t1, t0)
+                wr.place_operation(tamano,t1)
+                wr.place_operation(t0,t0,"1","+")
+
+                wr.place_if(temp, tamano, ">", lblerr2)
+                wr.place_operation(t0, t0, temp, "+")
+                wr.get_heap(t1, t0)
+                wr.get_heap(valor, t1)
+
+                lblcontinue = f"L{wr.getLabel()}"
+                wr.place_if(valor, "-2", "==", lblcontinue)
+                wr.place_goto(lblfinal)
+                
+                wr.place_label(lblcontinue)
+                wr.place_operation(posicion, t1) # CAMBIO DE ARRAY 
+                wr.place_goto(lblfinal)
+                
+
+            wr.place_label(lblerr1)
+            wr.insert_code("fmt.Printf(\"No es un array\");\n")
+            wr.insert_code("fmt.Printf(\"%c\", int(10));\n")
+            wr.place_goto(lblerrfinal)
+
+            wr.place_label(lblerr2)
+            wr.insert_code("fmt.Printf(\"Posicion fuera de los limites del array\");\n")
+            wr.insert_code("fmt.Printf(\"%c\", int(10));\n")
+            wr.place_goto(lblerrfinal)
+
+            wr.place_label(lblfinal)
+            wr.insert_heap(t1, expresion.value)
+            wr.place_label(lblerrfinal)
         else:
-            mod[indexes[0]] = self.modificar_array(mod[indexes[0]], indexes[1:],valor)
-            return mod
-
-    def interpretar(self, tabla_simbolos, entorno = "Global"):
-        
-        # GET ARRAY ID
-        simbolo_array = tabla_simbolos.get(self.id)
-        if(simbolo_array is None):
-            error("variable %s no definida"%(self.valor), "expresion array posicion", self.line)
-        if(simbolo_array.tipo != Tipo.Array):
-            error("variable '%s' no es de tipo array, no puede ser accesada por posicion"%(self.id), "acceso array", self.line)
-        
-        # VALOR EXPRESION
-        valor = self.expresion.interpretar(tabla_simbolos)
-
-        #VALORES POSICIONES
-        posiciones = []
-        for pos in self.posiciones:
-            pos = pos.interpretar(tabla_simbolos)
-            if(pos.type != Tipo.Int64):
-                error("valor de posicion invalido se esperaba un valor de tipo 'Int64',  se obtuvo %s"%(pos.type),"acceso array", self.line)
-                break
-            posiciones.append(pos.value-1)
-        #NUEVO ARRAY
-        copia_array = simbolo_array.valor
-        nivel = copia_array
-        #VERIFICAR INDICES
-        for pos in posiciones:    
-            if(pos > len(nivel)):
-                error("posicion '%s' fuera de los limites del array"%(pos), "acceso array", self.line)
-            if(isinstance(nivel, list) is not True):
-                error("el valor en posicion '%s' no es de tipo array, no puede ser accesada por posicion"%(pos), "acceso array", self.line)
-            else:
-                nivel = nivel[pos]
-        #print(copia_array, posiciones)
-        nuevo_ar = self.modificar_array(copia_array, posiciones, valor)
-        #print(nuevo_ar)
-        s = simbolo(self.id, nuevo_ar, Tipo.Array, entorno, self.line, self.col)
-        # Actualizar valor
-        tabla_simbolos.update(s)
+            print("ERROR")
 
 class instruccion_if(instruccion):
 
@@ -328,6 +355,17 @@ class instruccion_print(instruccion):
                 wr.place_print("d", v.value)
             elif v.type == Tipo.Float64:
                 wr.place_print("f", v.value)
+            elif v.type == Tipo.Array:
+                temp = f"T{wr.getPointer()}"
+                wr.place_operation(temp, "P", tabla_simbolos.pos + 1, "+")
+                wr.insert_stack(temp, v.value)
+                wr.new_env(tabla_simbolos.pos)
+                wr.call_function("printArrNative")
+                wr.get_stack(temp, "P")
+                wr.return_evn(tabla_simbolos.pos)
+                wr.addPrintArray()
+
+
         if self.tipo == "println":
             wr.place_print("c", 10)
 
@@ -421,7 +459,7 @@ class definicion_funcion(instruccion):
         tabla_simbolos  = ts(tabla_simbolos)
         returnlbl = f"L{wr.getLabel()}"
         tabla_simbolos.returnlbl = returnlbl
-
+        tabla_simbolos.pos = 1
         wr.addFunc(self.id, 1)
         for param in self.parametros:
             tipo = Tipo.Int64
@@ -445,6 +483,7 @@ class definicion_funcion(instruccion):
         for inst in self.instrucciones:
             inst.interpretar(tabla_simbolos,wr)
 
+        wr.place_goto(returnlbl)
         wr.place_label(returnlbl)
         wr.endFunc()
 
@@ -464,17 +503,17 @@ class instruccion_llamada_funcion(instruccion):
                 parametros.append(param.interpretar(tabla_simbolos,wr))
             temp = f"T{wr.getPointer()}"
 
-            wr.place_operation(temp, "P", size + 1, "+")
+            wr.place_operation(temp, "P", size, "+")
             aux  = 0
             for param in parametros:
                 aux += 1
                 wr.insert_stack(temp, param.value)
                 if aux != len(parametros):
                     wr.place_operation(temp, temp, 1, "+")
-            wr.new_env(size)
+            wr.new_env(size - 1)
             wr.call_function(self.id)
             wr.get_stack(temp, "P")
-            wr.return_evn(size)
+            wr.return_evn(size - 1)
 
             return valorExpresion(temp, Tipo.Float64, True)
 
