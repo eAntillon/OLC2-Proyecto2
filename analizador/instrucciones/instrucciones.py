@@ -556,7 +556,6 @@ class instruccion_return(instruccion):
             wr.insert_stack('P', valor.value)
         wr.place_goto(tabla_simbolos.returnlbl)
 
-
 class instruccion_push(instruccion):
     def __init__(self, array, expresion, linea, columna):
         self.array = array
