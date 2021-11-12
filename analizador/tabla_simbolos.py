@@ -10,7 +10,6 @@ class Tipo(Enum):
     Nothing = "Nothing"
     Array = "Array"
     Struct = "Struct"
-    ArrayArray = "ArrayArray"
 
 @dataclass
 class simbolo():
@@ -18,47 +17,22 @@ class simbolo():
     id: str
     tipo: Tipo
     apuntador: int
-    line: int
-    col: int
+    
 
-    def __init__(self, id, tipo, apuntador, isGlobal, isHeap, tipoStruct):
+    def __init__(self, id, tipo, apuntador, isGlobal, isHeap, tipoStruct, niveles):
         self.id = id
         self.tipo = tipo    
         self.apuntador = apuntador
         self.isGlobal = isGlobal
         self.inHeap = isHeap
         self.structType = tipoStruct
+        self.niveles = niveles
 
     def print(self):
         print("id: ",self.id, ", tipo: ", self.tipo.value, "apuntador: ", self.apuntador)
     
     def toString(self):
         return "id: %s, tipo: %s, apuntador: %s"%(self.id, self.tipo.value, self.apuntador)
-
-    def arrayString(self, array):
-        lista = []
-        for l in array:
-            if isinstance(l, list):
-                lista.append(self.arrayString(l))
-            elif isinstance(l, dict):
-                lista.append(self.dictString(l))
-            else:
-                lista.append(l.value)
-        return lista
-
-    def dictString(self, dictonary):
-        dicto = {}
-        for key, value in dictonary.items():
-            if isinstance(value, list):
-                dicto[key] = self.arrayString(value)
-            elif isinstance(value, dict):
-                dicto[key] = self.dictString(value)
-            else:
-                try:
-                    dicto[key] = value.value
-                except Exception:
-                    dicto[key] = value
-        return dicto
 
 class tabla_simbolos():
 
@@ -70,8 +44,6 @@ class tabla_simbolos():
     cicloInicio = ""
     cicloFinal = ""
     returnlbl = ""
-
-    entorno = None
 
     def __init__(self, ts = None):
         if ts is not None:
@@ -95,6 +67,7 @@ class tabla_simbolos():
             self.cicloInicio = ""
             self.cicloFinal = ""
             self.returnlbl = ""
+            self.entorno = False
 
 
     def newEnv(self, nombre):
@@ -103,8 +76,8 @@ class tabla_simbolos():
     def returnEnv(self):
         self.entorno = None
 
-    def add(self, id, tipo, inHeap, strucType = ""):
-        simb = simbolo(id,tipo, self.pos, (self.entorno == None), inHeap, strucType)
+    def add(self, id, tipo, inHeap, strucType = "", nivel = 1):
+        simb = simbolo(id,tipo, self.pos, (self.entorno == False), inHeap, strucType, nivel)
         self.simbolos[simb.id] = simb
         self.pos += 1
         

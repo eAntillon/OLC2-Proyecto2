@@ -31,7 +31,7 @@ class write():
 
     def get_printString(self):
         texto_print = "func printString(){\n" 
-        texto_print += f"T{self.getPointer()} = P+0;\nT{self.getPointer()} = stack[int(T{self.getLastPointer()-1})];\n"
+        texto_print += f"T{self.getPointer()} = 0;\nT{self.getPointer()} = stack[int(T{self.getLastPointer()-1})];\n"
         texto_print += f"L{self.getLabel()}:\n"
         texto_print += f"T{self.getPointer()} = heap[int(T{self.getLastPointer()-1})];\n"
         texto_print += f"if T{self.getLastPointer()} == -1 "

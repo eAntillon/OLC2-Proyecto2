@@ -6,7 +6,6 @@ from analizador.tabla_simbolos import simbolo, Tipo, tabla_simbolos as  ts
 from analizador.write import write
 from abc import ABC, abstractmethod
 from analizador.error import ContinueError, ReturnError, error, BreakError
-import traceback
 
 class instruccion():
 
@@ -27,9 +26,8 @@ class asignacion(instruccion):
         # ASIGNAR EXPRESION
         expresion = self.expresion.interpretar(tabla_simbolos,wr)
         existance:simbolo = tabla_simbolos.get(self.id)
-
         if existance is not None:
-            if tabla_simbolos.entorno is not None:
+            if existance.isGlobal == False:
                 pos = f"T{wr.getPointer()}"
                 wr.place_operation(pos, "P", existance.apuntador, "+")
                 wr.insert_stack(pos,expresion.value)
@@ -41,15 +39,21 @@ class asignacion(instruccion):
             expresion1 = tabla_simbolos.get(self.id)
             pos = tabla_simbolos.getPos() - 1
             temp = f"L{wr.getLabel()}"
-            if tabla_simbolos.entorno is not None:
+            if tabla_simbolos.entorno is not None and expresion.type != Tipo.Bool:
                 pos = f"T{wr.getPointer()}"
                 wr.place_operation(pos, "P", expresion1.apuntador, "+")
 
             if expresion.type == Tipo.Bool:
                 wr.place_label(expresion.truelbl)
+                if tabla_simbolos.entorno is not None:
+                    pos = f"T{wr.getPointer()}"
+                    wr.place_operation(pos, "P", expresion1.apuntador, "+")
                 wr.insert_stack(pos,1)
                 wr.place_goto(temp)
                 wr.place_label(expresion.falselbl)
+                if tabla_simbolos.entorno is not None:
+                    pos = f"T{wr.getPointer()}"
+                    wr.place_operation(pos, "P", expresion1.apuntador, "+")
                 wr.insert_stack(pos,0)
                 wr.place_label(temp)
             else:
@@ -76,10 +80,12 @@ class asignacion_array(instruccion):
             else:
                 wr.insert_stack(existance.apuntador,expresion.value)
         else:
+            dim = 1
             if self.tipo is not None:
                 cadena = self.tipo.split("{")
-                print("HOLA AQUI CADENA", cadena)
-            tabla_simbolos.add(self.id, expresion.type, (expresion.type == Tipo.String or expresion.type == Tipo.Struct))
+                if len(cadena) > 2:
+                    dim = len(cadena) - 1
+            tabla_simbolos.add(self.id, Tipo.Array, (expresion.type == Tipo.String or expresion.type == Tipo.Struct), "", dim)
             expresion1 = tabla_simbolos.get(self.id)
             pos = tabla_simbolos.getPos() - 1
             temp = f"L{wr.getLabel()}"
@@ -176,7 +182,7 @@ class asignacion_array_posicion(instruccion):
             wr.insert_heap(t1, expresion.value)
             wr.place_label(lblerrfinal)
         else:
-            print("ERROR")
+            print("ERROR ARRAY NO ENCONTRADO")
 
 class instruccion_if(instruccion):
 
@@ -234,6 +240,7 @@ class instruccion_while(instruccion):
 
         tabla_simbolos = ts(tabla_simbolos)
         tabla_simbolos.cicloInicio = inicio
+        tabla_simbolos.pos = 1
         valor = self.expresion.interpretar(tabla_simbolos,wr)
         tabla_simbolos.cicloFinal = valor.falselbl
 
@@ -456,10 +463,11 @@ class definicion_funcion(instruccion):
 
     def  interpretar(self, tabla_simbolos, wr:write):
         tabla_simbolos.addFunc(self.id)
-        tabla_simbolos  = ts(tabla_simbolos)
         returnlbl = f"L{wr.getLabel()}"
-        tabla_simbolos.returnlbl = returnlbl
-        tabla_simbolos.pos = 1
+        tabla_simbolos_copy = ts(tabla_simbolos)
+        tabla_simbolos_copy.pos = 1
+        tabla_simbolos_copy.returnlbl = returnlbl
+        tabla_simbolos_copy.entorno = True
         wr.addFunc(self.id, 1)
         for param in self.parametros:
             tipo = Tipo.Int64
@@ -473,19 +481,22 @@ class definicion_funcion(instruccion):
                 tipo = Tipo.Char
             elif param[1] == "Bool":
                 tipo = Tipo.Bool
-            elif param[1] == "Array":
-                tipo = Tipo.Array
             elif param[1] == "Struct":
                 tipo = Tipo.Struct
+            else:
+                if param[1] is not None:
+                    if param[1].split("{")[0] == "Vector":
+                        tipo = Tipo.Array
             
-            tabla_simbolos.add(param[0], tipo,  (param[1] == "String" or param[1] == "Struct"))
+            tabla_simbolos_copy.add(param[0], tipo,  (param[1] == "String" or param[1] == "Struct"))
 
         for inst in self.instrucciones:
-            inst.interpretar(tabla_simbolos,wr)
+            inst.interpretar(tabla_simbolos_copy,wr)
 
         wr.place_goto(returnlbl)
         wr.place_label(returnlbl)
         wr.endFunc()
+        tabla_simbolos_copy.entorno = False
 
 class instruccion_llamada_funcion(instruccion):
     def __init__(self, id, parametros, linea, columna):
@@ -496,6 +507,7 @@ class instruccion_llamada_funcion(instruccion):
 
     def interpretar(self, tabla_simbolos:ts, wr:write):
 
+        tabla_simbolos.entorno = True
         parametros = []
         if tabla_simbolos.getFunc(self.id) is not None:
             size = tabla_simbolos.pos
@@ -503,18 +515,18 @@ class instruccion_llamada_funcion(instruccion):
                 parametros.append(param.interpretar(tabla_simbolos,wr))
             temp = f"T{wr.getPointer()}"
 
-            wr.place_operation(temp, "P", size, "+")
+            wr.place_operation(temp, "P", size + 1, "+")
             aux  = 0
             for param in parametros:
                 aux += 1
                 wr.insert_stack(temp, param.value)
                 if aux != len(parametros):
                     wr.place_operation(temp, temp, 1, "+")
-            wr.new_env(size - 1)
+            wr.new_env(size)
             wr.call_function(self.id)
             wr.get_stack(temp, "P")
-            wr.return_evn(size - 1)
-
+            wr.return_evn(size)
+            tabla_simbolos.entorno = False
             return valorExpresion(temp, Tipo.Float64, True)
 
 class instruccion_return(instruccion):

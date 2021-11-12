@@ -40,6 +40,7 @@ def submitCode():
     else:
         try:
             res = interpretar(text_input)
+            print(res)
             text_output, tabla_simbolos, errores = res
         except Exception as e:
             print("excepcion", e)

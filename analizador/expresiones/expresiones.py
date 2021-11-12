@@ -179,6 +179,28 @@ class expresion_binaria(expresion):
                 temp = f"T{wr.getPointer()}"
                 wr.place_mod_op(temp, expI.value, expD.value)
                 return valorExpresion(temp, Tipo.Float64, True)
+            if self.operador == "/":
+                res = f"T{wr.getPointer()}"
+                temp = f"T{wr.getPointer()}"
+                contin = f"L{wr.getLabel()}"
+                fin = f"L{wr.getLabel()}"
+                wr.place_operation(temp, expD.value)
+                wr.place_if(temp, "0", "!=", contin)
+                wr.place_print("c", 77)
+                wr.place_print("c", 97)
+                wr.place_print("c", 116)
+                wr.place_print("c", 104)
+                wr.place_print("c", 69)
+                wr.place_print("c", 114)
+                wr.place_print("c", 114)
+                wr.place_print("c", 111)
+                wr.place_print("c", 114)
+                wr.place_operation(res, "0")
+                wr.place_goto(fin)
+                wr.place_label(contin)
+                wr.place_operation(res, expI.value, temp, self.operador)
+                wr.place_label(fin)
+                return valorExpresion(res, Tipo.Float64, True)
 
             if self.operador == "*" and (expI.type == Tipo.String and expD.type == Tipo.String):
                 t1 = f"T{wr.getPointer()}"
@@ -202,8 +224,7 @@ class expresion_binaria(expresion):
             
             if expI.type == Tipo.Float64 or expD.type == Tipo.Float64:
                 return valorExpresion(temp, Tipo.Float64, True)
-            if self.operador == "/":
-                return valorExpresion(temp, Tipo.Float64, True)
+
             return valorExpresion(temp, Tipo.Int64, True)
 
         elif self.operador == "^":
@@ -607,12 +628,13 @@ class expresion_acceso_array(expresion):
         existance:simbolo = tabla_simbolos.get(self.id)
 
         if existance is not None:
-            wr.comment("ACCESO ARRAY")
+            
             posiciones = []
             for pos in self.posiciones:
                 valor = pos.interpretar(tabla_simbolos,wr)
                 posiciones.append(valor)
             
+            wr.comment("ACCESO ARRAY")
             apuntador = existance.apuntador
             posicion = f"T{wr.getPointer()}"
             wr.get_stack(posicion, apuntador)
@@ -658,16 +680,30 @@ class expresion_acceso_array(expresion):
                 wr.place_goto(lblfinal)
 
                 wr.place_label(lblerr2)
-                wr.insert_code("fmt.Printf(\"Posicion fuera de los limites del array\");\n")
+                wr.place_print("c", 66)
+                wr.place_print("c", 111)
+                wr.place_print("c", 117)
+                wr.place_print("c", 110)
+                wr.place_print("c", 100)
+                wr.place_print("c", 115)
+                wr.place_print("c", 69)
+                wr.place_print("c", 114)
+                wr.place_print("c", 114)
+                wr.place_print("c", 111)
+                wr.place_print("c", 114)
                 
                 wr.place_label(lblfinal)
             lblreturn = f"L{wr.getLabel()}"
             wr.place_if(valor, "-2", "!=", lblreturn)
             wr.place_operation(valor, t1)
             wr.place_label(lblreturn)
-            return valorExpresion(valor, Tipo.Int64, True)
+            dim = existance.niveles
+            if len(posiciones) == dim:
+                return valorExpresion(valor, Tipo.Float64, True)
+            else:
+                return valorExpresion(valor, Tipo.Array, True)
         else:
-            print("ERROR")
+            print("ERROR ARRAY NO ENCO")
 
 class expression_array_range(expresion):
     def __init__(self, id, range, linea, columna):

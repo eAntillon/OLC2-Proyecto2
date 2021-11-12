@@ -228,7 +228,8 @@ def p_asignacion(t):
 def p_asignacion_global(t):
     '''asignacion_global  :   GLOBAL ID IGUAL expresion'''
     line = t.lexer.lineno
-    col = get_column(t[2], lexer.lexdata, line)
+    col = get_column(t[1], lexer.lexdata, line)
+    t[0] = asignacion(t[2],t[4],line,col)
 
 #ARRAYS
 
@@ -617,7 +618,8 @@ def p_lista_identicadores_unico(t):
     '''parametros_funcion : param_func '''
     t[0] = [t[1]]
 def p_param_func(t):
-    '''param_func   :   ID definicion_tipo'''
+    '''param_func   :   ID definicion_tipo
+                    |   ID definicion_tipo_vector'''
     t[0] = [t[1], t[2]]
 
 # LLAMADA FUNCION O STRUCT CON PARAMETROS
