@@ -21,7 +21,7 @@ def interpretar(texto):
         f = open('./salida.go', 'r')
         res = f.read()
         f.close()
-        return [res, [], []]
+        return [res, ts.get_table(), []]
     except Exception as e:
         print(traceback.format_exc())
         output = str(e)

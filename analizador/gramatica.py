@@ -221,14 +221,14 @@ def p_instruccion(t):
 def p_asignacion(t):
     '''asignacion  :   ID IGUAL expresion'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = asignacion(t[1],t[3],line,col)
     
 
 def p_asignacion_global(t):
     '''asignacion_global  :   GLOBAL ID IGUAL expresion'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = asignacion(t[2],t[4],line,col)
 
 #ARRAYS
@@ -236,27 +236,27 @@ def p_asignacion_global(t):
 def p_asignacion_array(t):
     '''asignacion_array :   ID IGUAL expresion_array definicion_tipo_vector'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = asignacion_array(t[1], t[3], t[4], line, col)
 
 def p_asignacion_posicion_array(t):
     '''asignacion_posicion_array  :   ID lista_acceso_posicion IGUAL expresion'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = asignacion_array_posicion(t[1], t[2], t[4], line, col)
 
 
 def p_asignacion_posicion_array_igual_array(t):
     '''asignacion_posicion_array  :   ID lista_acceso_posicion IGUAL expresion_array'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)  
+    col = t.lexpos(1)
     t[0] = asignacion_array_posicion(t[1], t[2], t[4], line, col)
 
 def p_expresion_array(t):
     '''expresion_array  :   CORIZQ lista_expresiones CORDER 
                         |   CORIZQ empty CORDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line) 
+    col = t.lexpos(1)
     t[0] = expresion_array(t[2], line, col)
 
 def p_instruccion_push(t):
@@ -266,20 +266,20 @@ def p_instruccion_push(t):
                         |   PUSH NOT PARIZQ expresion_array COMA expresion_array PARDER
                         |   PUSH NOT PARIZQ expresion COMA expresion_array PARDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line) 
+    col = t.lexpos(1)
 
 def p_instruccion_pop(t):
     '''instruccion_pop  :   POP NOT PARIZQ ID PARDER
                         |   POP NOT PARIZQ expresion_array PARDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)  
+    col = t.lexpos(1)
     
 
 # ACCESO A POSICIOM ARRAY
 def p_expresion_acceso_array(t):
     '''expresion_acceso_array   :   ID lista_acceso_posicion'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = expresion_acceso_array(t[1], t[2], line, col)
 
 def p_lista_acceso_array(t):
@@ -311,7 +311,7 @@ def p_expresion_primitiva(t):
                             | TRUE
                             | FALSE'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = expresion_primitiva(t[1],line,col)
 
 
@@ -320,13 +320,13 @@ def p_expresion_primitiva(t):
 def p_expresion_acceso_array_range(t):
     '''expresion_accesos_array_range    :   ID CORIZQ expresion_range CORDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
 
 # EXPRESIONES
 def p_expresion(t):
     '''expresion    :   tipo_expresion definicion_tipo''' 
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = t[1]
 
 def p_tipo_expresion(t):
@@ -375,7 +375,7 @@ def p_definicion_tipo_struct(t):
 def p_expresion_id(t):
     '''expresion_id  : ID'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = expresion_id(t[1],line, col)
 def p_expresion_binaria(t):
     '''expresion_binaria    :   expresion MAS expresion
@@ -389,7 +389,7 @@ def p_expresion_binaria(t):
                             |   expresion AND expresion
                             |   expresion OR expresion'''
     line = t.lexer.lineno
-    col = get_column(t[2], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = expresion_binaria(t[1], t[2], t[3], line, col)
 
 
@@ -399,7 +399,7 @@ def p_expresion_binaria_Log(t):
                                     |   expresion IGUAL IGUAL expresion
                                     |   expresion NOT IGUAL expresion'''
     line = t.lexer.lineno
-    col = get_column(t[2], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = expresion_binaria(t[1], t[2]+t[3], t[4], line, col)
 
 def p_expresion_parentesis(t):
@@ -409,7 +409,7 @@ def p_expresion_parentesis(t):
 def p_expresion_unaria(t):
     '''expresion_unaria : MENOS expresion %prec UMENOS'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = expresion_binaria(expresion_primitiva(0,line,col),t[1], t[2], line, col)
 
 def p_expresion_nativa(t):
@@ -427,7 +427,7 @@ def p_expresion_nativa(t):
                         |   LOWERCASE PARIZQ expresion PARDER
                         |   UPPERCASE PARIZQ expresion PARDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = expresion_nativa(t[1], t[3], line, col)
     
 def p_expresion_nativa_parametros(t):
@@ -435,7 +435,7 @@ def p_expresion_nativa_parametros(t):
                         |   PARSE PARIZQ tipo COMA expresion PARDER
                         |   TRUNC PARIZQ tipo COMA expresion PARDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
 
 def p_expresion_range(t):
     '''expresion_range  :   expresion DOSPT expresion
@@ -451,44 +451,44 @@ def p_expresion_nothing(t):
 def p_instruccion_if(t):
     '''instruccion_if   :   IF expresion empty instrucciones empty'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_if(t[2], t[4], None, [],line, col)
 
 def p_instruccion_elseif_b(t):
     '''instruccion_elseif   :   ELSEIF expresion empty instrucciones empty'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_if(t[2], t[4], None, [], line, col)
 
 def p_instruccion_elseif(t):
     '''instruccion_elseif   :   ELSEIF expresion empty instrucciones empty ELSE empty instrucciones empty'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_if(t[2], t[4], None, t[8], line, col)
 
 def p_instruccion_elseif_c(t):
     '''instruccion_elseif   :   ELSEIF expresion empty instrucciones empty instruccion_elseif'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_if(t[2], t[4], t[6], [], line, col)
 
 def p_instruccion_if_else(t):
     '''instruccion_if   :   IF expresion empty instrucciones empty ELSE empty instrucciones empty'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_if(t[2], t[4], None, t[8], line, col)
 
 def p_bloque_elseif(t):
     '''instruccion_if    :   IF expresion empty instrucciones empty instruccion_elseif '''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_if(t[2], t[4], t[6], [], line, col)
 
 # INSTRUCCION WHILE
 def p_while(t):
     '''instruccion_while    :   WHILE expresion instrucciones'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_while(t[2],t[3],line,col)
 
 
@@ -496,7 +496,7 @@ def p_while(t):
 def p_for_range(t):
     '''instruccion_for  :   FOR ID IN expresion_range instrucciones'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_for(t[2], t[4],t[5],line,col)
 
 
@@ -504,25 +504,25 @@ def p_for_range(t):
 def p_for_string(t): 
     '''instruccion_for  :   FOR ID IN expresion instrucciones'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
 
 def p_for_array(t):
     '''instruccion_for  :   FOR ID IN expresion_array instrucciones'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
 
 # INSTRUCCION BREAK
 def p_break(t):
     '''instruccion_break : BREAK '''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_break(line, col)
 
 # INSTRUCCION CONTINUE
 def p_continue(t):
     '''instruccion_continue : CONTINUE '''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_continue(line, col)
 
 # INSTRUCCION PRINT
@@ -553,7 +553,7 @@ def p_tipo(t):
 def p_definicion_struct(t):
     '''definicion_struct    :   tipo_struct STRUCT ID parametros_struct'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
 
 def p_parametros_struct(t):
     '''parametros_struct :  param_struct PTCOMA parametros_struct'''
@@ -575,7 +575,7 @@ def p_tipo_struct(t):
 def p_expresion_acceso_struct(t):
     '''expresion_acceso_struct  :   ID lista_acceso_struct'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
 
 def p_lista_acceso_struct(t):
     '''lista_acceso_struct  : PT ID lista_acceso_struct'''
@@ -590,12 +590,12 @@ def p_lista_acceso_struct1(t):
 def p_asignacion_prop_struct(t):
     '''asignacion_prop_struct   :   ID PT ID IGUAL expresion'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     
 def p_asignacion_prop_struct_array(t):
     '''asignacion_prop_struct   :   ID PT ID IGUAL expresion_array'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
 
 # DEFINICION FUNCION
 def p_definicion_funcion(t):
@@ -606,7 +606,7 @@ def p_definicion_funcion(t):
 def p_definicion_funcion_noParam(t):
     '''definicion_funcion   :   FUNCTION ID PARIZQ empty PARDER definicion_tipo instrucciones'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = definicion_funcion(t[2], [], t[7], t.lineno(1), t.lexpos(1))
 
 # LISTA PARAMETROS
@@ -626,14 +626,14 @@ def p_param_func(t):
 def p_asignacion_funcion_struct(t):
     '''llamada_funcion_struct    :   ID PARIZQ lista_expresiones PARDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_llamada_funcion(t[1], t[3], t.lineno(1), t.lexpos(1))
 
 # LLAMADA FUNCION O STRUCT SIN PARAMETROS
 def p_asignacion_funcion_struct_vacio(t):
     '''llamada_funcion_struct    :   ID PARIZQ empty PARDER'''
     line = t.lexer.lineno
-    col = get_column(t[1], lexer.lexdata, line)
+    col = t.lexpos(1)
     t[0] = instruccion_llamada_funcion(t[1], [], t.lineno(1), t.lexpos(1))
 
 def p_instruccion_return(t):

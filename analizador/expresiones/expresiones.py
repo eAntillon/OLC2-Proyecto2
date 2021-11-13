@@ -69,7 +69,7 @@ class expresion_primitiva(expresion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self, tabla_simbolos, wr:write):      
+    def interpretar(self, tabla_simbolos, wr:write, entorno = "Global"):      
         tipo_dato = None
         valor_interpretado = self.valor
         if(type(self.valor) is str):
@@ -133,7 +133,7 @@ class expresion_id(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, wr:write):
+    def interpretar(self, tabla_simbolos, wr:write, entorno = "Global"):
         valor:simbolo = tabla_simbolos.get(self.valor)
         wr.comment("ACCESO ID")
         if (valor is not None):
@@ -169,7 +169,7 @@ class expresion_binaria(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, wr:write):
+    def interpretar(self, tabla_simbolos, wr:write, entorno = "Global"):
         
         # operacion normal binaria
         if self.operador in ["+", "-", "*", "/", "%"]:
@@ -385,7 +385,7 @@ class expresion_nativa(expresion):
         self.linea = linea
         self.columna = columna
     
-    def interpretar(self, tabla_simbolos, wr:write):
+    def interpretar(self, tabla_simbolos, wr:write, entorno = "Global"):
         exp = self.expresion.interpretar(tabla_simbolos, wr)
         
         if isinstance(exp,list):
@@ -509,71 +509,13 @@ class expresion_nativa(expresion):
                 wr.return_evn(size)
                 return valorExpresion(t1, Tipo.String, True)
 
-class expresion_nativa_log(expresion):
-    def __init__(self, op,expresion1, expresion2, linea, columna):
-        self.op = op
-        self.expresion1 = expresion1
-        self.expresion2 = expresion2
-        self.linea = linea
-        self.columna = columna
-    
-    def interpretar(self,  entorno = "Global"):
-        
-        if(self.op == "log"):
-            exp1 = self.expresion1.interpretar(tabla_simbolos)
-            exp2 = self.expresion2.interpretar(tabla_simbolos)
-            valor1 = exp1.value
-            tipo1 = exp1.type
-            valor2 = exp2.value
-            tipo2 = exp2.type
-
-            # LOG
-            if((tipo1 == Tipo.Int64 or tipo1 == Tipo.Float64) and (tipo2 == Tipo.Int64 or tipo2 == Tipo.Float64)):
-                return valorExpresion(math.log(valor2,valor1), Tipo.Float64)
-            else:
-                #ERROR TIPOS
-                error("valores no admitidos para funcion log: '%s' y 'y '%s"%(tipo1.value, tipo2.value), "funcion nativa", self.linea)
-        elif(self.op == "parse"):
-            exp2 = self.expresion2.interpretar(tabla_simbolos)
-            valor2 = exp2.value
-            tipo2 = exp2.type
-            if isinstance( self.expresion1, str):
-                if(self.expresion1 == "Int64"):
-                    if(tipo2 == Tipo.String):
-                        return valorExpresion(int(valor2), Tipo.Int64)
-                    else:
-                        error("tipo de parametro invalido para funcion '%s', se esperaba '%s'"%(self.op,Tipo.String.value), "funcion nativa", self.linea)
-                elif(self.expresion1 == "Float64"):
-                    if(tipo2 == Tipo.String):
-                        return valorExpresion(float(valor2), Tipo.Float64)
-                    else:
-                        error("tipo de parametro invalido para funcion '%s', se esperaba '%s'"%(self.op,Tipo.String.value), "funcion nativa", self.linea)
-                else:
-                    error("tipo de parametro invalido para funcion '%s', se esperaba '%s' o '%s'"%(self.op, Tipo.Int64.value, Tipo.Float64.value), "funcion nativa", self.linea)                    
-            else:
-                error("tipo de parametro invalido para funcion '%s', se esperaba '%s' o '%s'"%(self.op, Tipo.Int64.value, Tipo.Float64.value), "funcion nativa", self.linea)                    
-        elif(self.op == "trunc"):
-            exp2 = self.expresion2.interpretar(tabla_simbolos)
-            valor2 = exp2.value
-            tipo2 = exp2.type
-            if isinstance( self.expresion1, str):
-                if(self.expresion1 == "Int64"):
-                    if(tipo2 == Tipo.Int64 or tipo2 == Tipo.Float64):
-                        return valorExpresion(int(valor2), Tipo.Int64)
-                    else:
-                        error("tipo de parametro invalido para funcion '%s', se esperaba '%s'"%(self.op,Tipo.Float64), "funcion nativa", self.linea)
-                else:
-                    error("tipo de parametro invalido para funcion '%s', se esperaba '%s'"%(self.op, Tipo.Int64.value), "funcion nativa", self.linea)                    
-            else:
-                error("tipo de parametro invalido para funcion '%s', se esperaba '%s'"%(self.op, Tipo.Int64.value), "funcion nativa", self.linea)
-
 class expresion_array(expresion):
     def __init__(self, expresiones, linea, columna):
         self.expresiones = expresiones
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self, tabla_simbolos, wr:write):
+    def interpretar(self, tabla_simbolos, wr:write, entorno = "Global"):
 
 
         t1 = f"T{wr.getPointer()}" 
@@ -624,7 +566,7 @@ class expresion_acceso_array(expresion):
         self.linea = linea
         self.columna = columna
 
-    def interpretar(self,  tabla_simbolos, wr:write):
+    def interpretar(self,  tabla_simbolos, wr:write, entorno = "Global"):
         existance:simbolo = tabla_simbolos.get(self.id)
 
         if existance is not None:

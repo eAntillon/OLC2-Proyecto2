@@ -19,20 +19,22 @@ class simbolo():
     apuntador: int
     
 
-    def __init__(self, id, tipo, apuntador, isGlobal, isHeap, tipoStruct, niveles):
+    def __init__(self, id, tipo, apuntador, isGlobal, isHeap, niveles, entorno):
         self.id = id
         self.tipo = tipo    
         self.apuntador = apuntador
         self.isGlobal = isGlobal
         self.inHeap = isHeap
-        self.structType = tipoStruct
         self.niveles = niveles
+        self.entorno = entorno
+        self.line = 0
+        self.col = 0
 
     def print(self):
-        print("id: ",self.id, ", tipo: ", self.tipo.value, "apuntador: ", self.apuntador)
+        print("id: ",self.id, ", tipo: ", self.tipo.value, "apuntador: ", self.apuntador, "entorno: ", self.entorno)
     
     def toString(self):
-        return "id: %s, tipo: %s, apuntador: %s"%(self.id, self.tipo.value, self.apuntador)
+        return "id: %s, tipo: %s, apuntador: %s, entorno: %s, linea: %s, columna: %s"%(self.id, self.tipo.value, self.apuntador, self.entorno,self.line,self.col)
 
 class tabla_simbolos():
 
@@ -76,11 +78,21 @@ class tabla_simbolos():
     def returnEnv(self):
         self.entorno = None
 
-    def add(self, id, tipo, inHeap, strucType = "", nivel = 1):
-        simb = simbolo(id,tipo, self.pos, (self.entorno == False), inHeap, strucType, nivel)
+    def add(self, id, tipo, inHeap, entorno, nivel = 1):
+        simb = simbolo(id,tipo, self.pos, (self.entorno == False), inHeap, nivel, entorno)
         self.simbolos[simb.id] = simb
         self.pos += 1
-        
+
+    def addPos(self, id, line, col):
+        if(id in self.simbolos.keys()):
+            simb = self.simbolos[id]
+            print(simb)
+            simb.line = line
+            simb.col = col
+            self.simbolos.update({id : simb})
+            return True
+        else:
+            return False
     
     def get(self, id):
         ''' Retorna el simbolo si existe, sino devuelve None'''
@@ -120,8 +132,8 @@ class tabla_simbolos():
 
     def print(self):
         print("--- Tabla de simbolos ---")
-        if len(cls.simbolos) > 0:
-            for s in cls.simbolos.values():
+        if len(self.simbolos) > 0:
+            for s in self.simbolos.values():
                 print(" ->", s.toString())
         else:
             print("Tabla vacia")
@@ -129,3 +141,16 @@ class tabla_simbolos():
         #self.print_structs()
         #self.print_funcs()
         #self.print_variable_struct()
+
+    def get_table(self):
+        lista_simbolos = []
+        for key,value in self.simbolos.items():
+            valor = {}
+            valor["id"] = key
+            valor["tipo"] = value.tipo
+            valor["entorno"] = value.entorno
+            valor["linea"] = value.line
+            valor["columna"] = value.col
+            lista_simbolos.append(valor)
+        lista_completa = lista_simbolos + self.funciones_print
+        return lista_completa
